@@ -422,7 +422,10 @@ Do not output any other text or wrapper. Return raw JSON.`;
             logs: true,
           });
 
-          const finalUrl = composeResult.data?.video?.url || composeResult.data?.url;
+          const finalUrl =
+            composeResult.data?.video_url ||
+            composeResult.data?.video?.url ||
+            composeResult.data?.url;
 
           if (!finalUrl) {
             throw new Error("FFmpeg composition did not return a valid video URL");
