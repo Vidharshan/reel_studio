@@ -361,31 +361,19 @@ Do not output any other text or wrapper. Return raw JSON.`;
           // timestamp and duration must be in milliseconds inside the keyframes array objects
           const tracks: any[] = [
             {
-              id: "hook_video",
+              id: "main_video",
               type: "video",
               keyframes: [
                 {
                   url: hookClipUrl,
                   timestamp: 0,
                   duration: 3000
-                }
-              ]
-            },
-            {
-              id: "body_video",
-              type: "video",
-              keyframes: [
+                },
                 {
                   url: bodyClipUrl,
                   timestamp: 3000,
                   duration: 4000
-                }
-              ]
-            },
-            {
-              id: "cta_video",
-              type: "video",
-              keyframes: [
+                },
                 {
                   url: ctaClipUrl,
                   timestamp: 7000,
