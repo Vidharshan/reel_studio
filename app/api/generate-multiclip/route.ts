@@ -427,6 +427,8 @@ Do not output any other text or wrapper. Return raw JSON.`;
 
           const composeResult = await (fal.subscribe as any)("fal-ai/ffmpeg-api/compose", {
             input: {
+              width: 720,
+              height: 1280,
               tracks,
             },
             logs: true,
