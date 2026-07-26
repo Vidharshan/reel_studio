@@ -46,6 +46,14 @@ export default function ReelStudio() {
   const [traceOpen, setTraceOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
+  /* --- Cache / Resume Pipeline State --- */
+  const [resumePipeline, setResumePipeline] = useState(true);
+  const [cachedVideoUrl, setCachedVideoUrl] = useState<string | null>(null);
+  const [cachedVoiceoverUrl, setCachedVoiceoverUrl] = useState<string | null>(null);
+  const [cachedMusicUrl, setCachedMusicUrl] = useState<string | null>(null);
+  const [cachedCaptions, setCachedCaptions] = useState<any[] | null>(null);
+  const [cachedEditPlan, setCachedEditPlan] = useState<any | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -75,6 +83,39 @@ export default function ReelStudio() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isGenerating]);
+
+  // Clear cache if inputs change to prevent mismatched stages
+  useEffect(() => {
+    setCachedVideoUrl(null);
+    setCachedVoiceoverUrl(null);
+    setCachedMusicUrl(null);
+  }, [imageUrl]);
+
+  useEffect(() => {
+    setCachedCaptions(null);
+    setCachedEditPlan(null);
+    setCachedVoiceoverUrl(null);
+    setCachedMusicUrl(null);
+  }, [videoUrls]);
+
+  useEffect(() => {
+    setCachedVideoUrl(null);
+    setCachedVoiceoverUrl(null);
+    setCachedEditPlan(null);
+  }, [hookText]);
+
+  useEffect(() => {
+    setCachedMusicUrl(null);
+    setCachedEditPlan(null);
+  }, [tone]);
+
+  useEffect(() => {
+    setCachedVideoUrl(null);
+    setCachedVoiceoverUrl(null);
+    setCachedMusicUrl(null);
+    setCachedCaptions(null);
+    setCachedEditPlan(null);
+  }, [mode]);
 
   /* --- File handling --- */
   const handleFileSelect = useCallback(async (file: File) => {
@@ -218,9 +259,22 @@ export default function ReelStudio() {
 
     try {
       const endpoint = mode === "single" ? "/api/generate" : "/api/generate-multiclip";
-      const payload = mode === "single"
+      const payload: Record<string, any> = mode === "single"
         ? { imageUrl, hookText: hookText.trim(), tone }
         : { videoUrls, hookText: hookText.trim(), tone };
+
+      if (resumePipeline) {
+        if (mode === "single") {
+          if (cachedVideoUrl) payload.existingVideoUrl = cachedVideoUrl;
+          if (cachedVoiceoverUrl) payload.existingVoiceoverUrl = cachedVoiceoverUrl;
+          if (cachedMusicUrl) payload.existingMusicUrl = cachedMusicUrl;
+        } else {
+          if (cachedCaptions) payload.existingCaptions = cachedCaptions;
+          if (cachedEditPlan) payload.existingEditPlan = cachedEditPlan;
+          if (cachedVoiceoverUrl) payload.existingVoiceoverUrl = cachedVoiceoverUrl;
+          if (cachedMusicUrl) payload.existingMusicUrl = cachedMusicUrl;
+        }
+      }
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -279,7 +333,7 @@ export default function ReelStudio() {
   const handleSSEEvent = (type: string, data: Record<string, unknown>) => {
     switch (type) {
       case "step": {
-        const stepData = data as unknown as StepEvent;
+        const stepData = data as any;
         setSteps((prev) => ({
           ...prev,
           [stepData.step]: {
@@ -288,6 +342,32 @@ export default function ReelStudio() {
             elapsedMs: stepData.durationMs || prev[stepData.step]?.elapsedMs || 0,
           },
         }));
+
+        // Cache completed steps
+        if (stepData.status === "completed") {
+          if (mode === "single") {
+            if (stepData.step === 1 && stepData.resultUrl) {
+              setCachedVideoUrl(stepData.resultUrl);
+            }
+            if (stepData.step === 2 && stepData.resultUrl) {
+              setCachedVoiceoverUrl(stepData.resultUrl);
+            }
+            if (stepData.step === 3 && stepData.resultUrl) {
+              setCachedMusicUrl(stepData.resultUrl);
+            }
+          } else {
+            if (stepData.step === 1 && stepData.processedClips) {
+              setCachedCaptions(stepData.processedClips);
+            }
+            if (stepData.step === 2 && stepData.editPlan) {
+              setCachedEditPlan(stepData.editPlan);
+            }
+            if (stepData.step === 3) {
+              if (stepData.voiceoverUrl) setCachedVoiceoverUrl(stepData.voiceoverUrl);
+              if (stepData.musicUrl) setCachedMusicUrl(stepData.musicUrl);
+            }
+          }
+        }
         break;
       }
       case "complete": {
@@ -333,6 +413,61 @@ export default function ReelStudio() {
     mode === "single"
       ? !!imageUrl && !!hookText.trim() && !isGenerating && !isUploading
       : videoUrls.length > 0 && !!hookText.trim() && !isGenerating && !isUploadingVideo;
+
+  // Compute what can be skipped and the savings
+  const hasCache = mode === "single"
+    ? (!!cachedVideoUrl || !!cachedVoiceoverUrl || !!cachedMusicUrl)
+    : (!!cachedCaptions || !!cachedEditPlan || !!cachedVoiceoverUrl || !!cachedMusicUrl);
+
+  let savedCost = 0;
+  let savedTimeSec = 0;
+  let skippedStepsCount = 0;
+
+  if (hasCache && resumePipeline) {
+    if (mode === "single") {
+      if (cachedVideoUrl) {
+        savedCost += 0.28;
+        savedTimeSec += 15;
+        skippedStepsCount++;
+      }
+      if (cachedVoiceoverUrl) {
+        const charCount = hookText.length;
+        savedCost += Math.max((charCount / 1000) * 0.1, 0.01);
+        savedTimeSec += 2;
+        skippedStepsCount++;
+      }
+      if (cachedMusicUrl) {
+        savedCost += 0.02;
+        savedTimeSec += 5;
+        skippedStepsCount++;
+      }
+    } else {
+      if (cachedCaptions) {
+        savedCost += videoUrls.length * 0.005;
+        savedTimeSec += videoUrls.length * 2;
+        skippedStepsCount++;
+      }
+      if (cachedEditPlan) {
+        savedCost += 0.002;
+        savedTimeSec += 2;
+        skippedStepsCount++;
+      }
+      if (cachedVoiceoverUrl) {
+        // approximate char count of combined voiceover
+        const editPlanText = cachedEditPlan
+          ? `${cachedEditPlan.hook.voiceover} ${cachedEditPlan.body.voiceover} ${cachedEditPlan.cta.voiceover}`
+          : hookText;
+        savedCost += Math.max((editPlanText.length / 1000) * 0.1, 0.01);
+        savedTimeSec += 2;
+        skippedStepsCount++;
+      }
+      if (cachedMusicUrl) {
+        savedCost += 0.02;
+        savedTimeSec += 5;
+        skippedStepsCount++;
+      }
+    }
+  }
 
   /* ==============================
      Render
@@ -622,6 +757,61 @@ export default function ReelStudio() {
           </div>
         </div>
       </section>
+
+      {/* Resume Settings */}
+      {hasCache && (
+        <div className="resume-settings-card glass-card fade-in" style={{
+          padding: "12px 16px",
+          marginBottom: "16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          borderRadius: "var(--radius-lg)",
+          background: "rgba(255, 255, 255, 0.02)",
+          alignItems: "flex-start"
+        }}>
+          <label style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+            fontWeight: "500",
+            color: "var(--text-bright)",
+            width: "100%"
+          }}>
+            <input
+              type="checkbox"
+              checked={resumePipeline}
+              onChange={(e) => setResumePipeline(e.target.checked)}
+              style={{
+                width: "16px",
+                height: "16px",
+                accentColor: "var(--accent-cyan)",
+                cursor: "pointer"
+              }}
+            />
+            <span>🔄 Resume Pipeline (Skip Completed Stages)</span>
+          </label>
+          
+          {resumePipeline && skippedStepsCount > 0 && (
+            <div style={{
+              fontSize: "0.75rem",
+              color: "var(--accent-cyan)",
+              marginLeft: "26px",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "12px",
+              lineHeight: "1.4"
+            }}>
+              <span>• Skips <strong>{skippedStepsCount}</strong> step{skippedStepsCount > 1 ? "s" : ""}</span>
+              <span>• Saves <strong>~${savedCost.toFixed(4)}</strong></span>
+              <span>• Saves <strong>~{savedTimeSec}s</strong> duration</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Generate Button */}
       <div className="generate-section fade-in">

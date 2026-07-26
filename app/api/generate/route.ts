@@ -27,10 +27,13 @@ function sendEvent(
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { imageUrl, hookText, tone } = body as {
+  const { imageUrl, hookText, tone, existingVideoUrl, existingVoiceoverUrl, existingMusicUrl } = body as {
     imageUrl: string;
     hookText: string;
     tone: ToneStyle;
+    existingVideoUrl?: string;
+    existingVoiceoverUrl?: string;
+    existingMusicUrl?: string;
   };
 
   if (!imageUrl || !hookText) {
@@ -97,128 +100,176 @@ export async function POST(request: NextRequest) {
           inputSummary: `Style: ${toneConfig.label}`,
         });
 
-        // Fire all 3 steps in parallel
+        // Fire all 3 steps in parallel, using existing output if present
         const [videoResult, ttsResult, musicResult] = await Promise.allSettled([
           // Step 1: Image to Video
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (fal.subscribe as any)("fal-ai/kling-video/v2.1/standard/image-to-video", {
-              input: {
-                prompt: `Cinematic slow motion, ${hookText}. Smooth camera movement, high quality, professional lighting.`,
-                image_url: imageUrl,
-                duration: "5",
-                aspect_ratio: "9:16",
-              },
-              logs: true,
-            })
-            .then((result: { data: Record<string, Record<string, string>> }) => {
-              const duration = Date.now() - step1Start;
-              sendEvent(controller, encoder, "step", {
-                step: 1,
-                name: "Image → Video",
-                modelId: "fal-ai/kling-video/v2.1/standard/image-to-video",
-                status: "completed",
-                startedAt: step1Start,
-                completedAt: Date.now(),
-                durationMs: duration,
-                costUsd: 0.28,
-                resultUrl: (result.data as Record<string, Record<string, string>>)?.video?.url,
-              });
-              return result;
-            })
-            .catch((err: Error) => {
-              sendEvent(controller, encoder, "step", {
-                step: 1,
-                name: "Image → Video",
-                modelId: "fal-ai/kling-video/v2.1/standard/image-to-video",
-                status: "failed",
-                startedAt: step1Start,
-                completedAt: Date.now(),
-                durationMs: Date.now() - step1Start,
-                error: err.message || "Video generation failed",
-              });
-              throw err;
-            }),
+          existingVideoUrl
+            ? Promise.resolve().then(() => {
+                sendEvent(controller, encoder, "step", {
+                  step: 1,
+                  name: "Image → Video",
+                  modelId: "fal-ai/kling-video/v2.1/standard/image-to-video",
+                  status: "completed",
+                  startedAt: step1Start,
+                  completedAt: Date.now(),
+                  durationMs: 0,
+                  costUsd: 0,
+                  resultUrl: existingVideoUrl,
+                  inputSummary: "Skipped (Using cached video)",
+                });
+                return { data: { video: { url: existingVideoUrl } } };
+              })
+            : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (fal.subscribe as any)("fal-ai/kling-video/v2.1/standard/image-to-video", {
+                input: {
+                  prompt: `Cinematic slow motion, ${hookText}. Smooth camera movement, high quality, professional lighting.`,
+                  image_url: imageUrl,
+                  duration: "5",
+                  aspect_ratio: "9:16",
+                },
+                logs: true,
+              })
+              .then((result: { data: Record<string, Record<string, string>> }) => {
+                const duration = Date.now() - step1Start;
+                sendEvent(controller, encoder, "step", {
+                  step: 1,
+                  name: "Image → Video",
+                  modelId: "fal-ai/kling-video/v2.1/standard/image-to-video",
+                  status: "completed",
+                  startedAt: step1Start,
+                  completedAt: Date.now(),
+                  durationMs: duration,
+                  costUsd: 0.28,
+                  resultUrl: (result.data as Record<string, Record<string, string>>)?.video?.url,
+                });
+                return result;
+              })
+              .catch((err: Error) => {
+                sendEvent(controller, encoder, "step", {
+                  step: 1,
+                  name: "Image → Video",
+                  modelId: "fal-ai/kling-video/v2.1/standard/image-to-video",
+                  status: "failed",
+                  startedAt: step1Start,
+                  completedAt: Date.now(),
+                  durationMs: Date.now() - step1Start,
+                  error: err.message || "Video generation failed",
+                });
+                throw err;
+              }),
 
           // Step 2: TTS
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (fal.subscribe as any)("fal-ai/elevenlabs/tts/eleven-v3", {
-              input: {
-                text: hookText,
-                voice: "Aria",
-                stability: 0.5,
-                similarity_boost: 0.75,
-                speed: 1,
-              },
-              logs: true,
-            })
-            .then((result: { data: Record<string, Record<string, string>> }) => {
-              const duration = Date.now() - step2Start;
-              const charCount = hookText.length;
-              const cost = (charCount / 1000) * 0.1;
-              sendEvent(controller, encoder, "step", {
-                step: 2,
-                name: "Voiceover",
-                modelId: "fal-ai/elevenlabs/tts/eleven-v3",
-                status: "completed",
-                startedAt: step2Start,
-                completedAt: Date.now(),
-                durationMs: duration,
-                costUsd: Math.max(cost, 0.01),
-                resultUrl: result.data?.audio?.url,
-              });
-              return result;
-            })
-            .catch((err: Error) => {
-              sendEvent(controller, encoder, "step", {
-                step: 2,
-                name: "Voiceover",
-                modelId: "fal-ai/elevenlabs/tts/eleven-v3",
-                status: "failed",
-                startedAt: step2Start,
-                completedAt: Date.now(),
-                durationMs: Date.now() - step2Start,
-                error: err.message || "TTS failed",
-              });
-              throw err;
-            }),
+          existingVoiceoverUrl
+            ? Promise.resolve().then(() => {
+                sendEvent(controller, encoder, "step", {
+                  step: 2,
+                  name: "Voiceover",
+                  modelId: "fal-ai/elevenlabs/tts/eleven-v3",
+                  status: "completed",
+                  startedAt: step2Start,
+                  completedAt: Date.now(),
+                  durationMs: 0,
+                  costUsd: 0,
+                  resultUrl: existingVoiceoverUrl,
+                  inputSummary: "Skipped (Using cached voiceover)",
+                });
+                return { data: { audio: { url: existingVoiceoverUrl } } };
+              })
+            : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (fal.subscribe as any)("fal-ai/elevenlabs/tts/eleven-v3", {
+                input: {
+                  text: hookText,
+                  voice: "Aria",
+                  stability: 0.5,
+                  similarity_boost: 0.75,
+                  speed: 1,
+                },
+                logs: true,
+              })
+              .then((result: { data: Record<string, Record<string, string>> }) => {
+                const duration = Date.now() - step2Start;
+                const charCount = hookText.length;
+                const cost = (charCount / 1000) * 0.1;
+                sendEvent(controller, encoder, "step", {
+                  step: 2,
+                  name: "Voiceover",
+                  modelId: "fal-ai/elevenlabs/tts/eleven-v3",
+                  status: "completed",
+                  startedAt: step2Start,
+                  completedAt: Date.now(),
+                  durationMs: duration,
+                  costUsd: Math.max(cost, 0.01),
+                  resultUrl: result.data?.audio?.url,
+                });
+                return result;
+              })
+              .catch((err: Error) => {
+                sendEvent(controller, encoder, "step", {
+                  step: 2,
+                  name: "Voiceover",
+                  modelId: "fal-ai/elevenlabs/tts/eleven-v3",
+                  status: "failed",
+                  startedAt: step2Start,
+                  completedAt: Date.now(),
+                  durationMs: Date.now() - step2Start,
+                  error: err.message || "TTS failed",
+                });
+                throw err;
+              }),
 
           // Step 3: Music
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (fal.subscribe as any)("cassetteai/music-generator", {
-              input: {
-                prompt: toneConfig.musicPrompt,
-                duration: 30,
-              },
-              logs: true,
-            })
-            .then((result: { data: Record<string, any> }) => {
-              const duration = Date.now() - step3Start;
-              sendEvent(controller, encoder, "step", {
-                step: 3,
-                name: "Music",
-                modelId: "cassetteai/music-generator",
-                status: "completed",
-                startedAt: step3Start,
-                completedAt: Date.now(),
-                durationMs: duration,
-                costUsd: 0.02,
-                resultUrl: result.data?.audio_file?.url || result.data?.audio?.url,
-              });
-              return result;
-            })
-            .catch((err: Error) => {
-              sendEvent(controller, encoder, "step", {
-                step: 3,
-                name: "Music",
-                modelId: "cassetteai/music-generator",
-                status: "failed",
-                startedAt: step3Start,
-                completedAt: Date.now(),
-                durationMs: Date.now() - step3Start,
-                error: err.message || "Music generation failed",
-              });
-              throw err;
-            }),
+          existingMusicUrl
+            ? Promise.resolve().then(() => {
+                sendEvent(controller, encoder, "step", {
+                  step: 3,
+                  name: "Music",
+                  modelId: "cassetteai/music-generator",
+                  status: "completed",
+                  startedAt: step3Start,
+                  completedAt: Date.now(),
+                  durationMs: 0,
+                  costUsd: 0,
+                  resultUrl: existingMusicUrl,
+                  inputSummary: "Skipped (Using cached music)",
+                });
+                return { data: { audio_file: { url: existingMusicUrl } } };
+              })
+            : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (fal.subscribe as any)("cassetteai/music-generator", {
+                input: {
+                  prompt: toneConfig.musicPrompt,
+                  duration: 30,
+                },
+                logs: true,
+              })
+              .then((result: { data: Record<string, any> }) => {
+                const duration = Date.now() - step3Start;
+                sendEvent(controller, encoder, "step", {
+                  step: 3,
+                  name: "Music",
+                  modelId: "cassetteai/music-generator",
+                  status: "completed",
+                  startedAt: step3Start,
+                  completedAt: Date.now(),
+                  durationMs: duration,
+                  costUsd: 0.02,
+                  resultUrl: result.data?.audio_file?.url || result.data?.audio?.url,
+                });
+                return result;
+              })
+              .catch((err: Error) => {
+                sendEvent(controller, encoder, "step", {
+                  step: 3,
+                  name: "Music",
+                  modelId: "cassetteai/music-generator",
+                  status: "failed",
+                  startedAt: step3Start,
+                  completedAt: Date.now(),
+                  durationMs: Date.now() - step3Start,
+                  error: err.message || "Music generation failed",
+                });
+                throw err;
+              }),
         ]);
 
         // Check which steps succeeded
