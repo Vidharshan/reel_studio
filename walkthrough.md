@@ -2,79 +2,71 @@
 
 ## What Was Built
 
-A single-page Next.js app that takes **one photo + a one-line hook** and produces a **finished 9:16 reel** with motion video, AI voiceover, background music — all powered by **4 chained fal.ai endpoints** running in parallel.
-
-![Reel Studio UI](C:/Users/rvidh/.gemini/antigravity/brain/e8a8a8ac-a162-48b0-a0ea-d482a146568c/ui_screenshot.png)
+A single-page Next.js app that supports two modes:
+1. **Single Photo Mode**: Takes **one photo + a hook** and produces a **finished 9:16 reel** with motion video, AI voiceover, and background music.
+2. **Multi-Clip Mode**: Takes **up to 5 video clips + a hook**, auto-edits/strips silence, captions the scenes, generates an editorial edit plan via LLM (Gemini 2.5), generates voiceover and background music, and stitches/composes them sequentially.
 
 ---
 
-## Architecture
+## Pipeline Architecture
 
+### Multi-Clip Mode
 ```mermaid
-graph LR
-    A[Upload Photo + Hook] --> B[API: /api/upload]
+graph TD
+    A[Upload 1-5 Clips + Hook] --> B[API: /api/upload-video]
     B --> C[fal.ai Storage]
-    A --> D[API: /api/generate SSE]
-    D --> E[Step 1: Kling Video]
-    D --> F[Step 2: ElevenLabs TTS]
-    D --> G[Step 3: MiniMax Music]
-    E --> H[Step 4: FFmpeg Compose]
-    F --> H
-    G --> H
+    A --> D[API: /api/generate-multiclip SSE]
+    D --> E[Step 1: auto-editor & Florence-2 Captioning]
+    E --> F[Step 2: LLM Editorial Planning - Gemini 2.5]
+    F --> G1[Step 3a: Voiceover - ElevenLabs]
+    F --> G2[Step 3b: Music - CassetteAI]
+    G1 --> H[Step 4: FFmpeg Compose]
+    G2 --> H
     H --> I[Final .mp4 Reel]
 ```
 
-Steps 1–3 run **in parallel**. Step 4 fires once all three resolve.
+---
+
+## Key Features Added & Fixed
+
+### 1. Sequential Composition Fixes
+* **Track Structure Consolidation**: Instead of using separate video tracks that caused overlap issues and `400 Bad Request` composition errors, sequential clips are compiled as sequential `keyframes` within a single `main_video` track.
+* **Output Resolution**: Added explicit `width: 720` and `height: 1280` parameters to the `compose` endpoint.
+* **Response Parser**: Updated the response parser to read from `data.video_url` directly, matching the compositor's schema.
+
+### 2. Resume & Skip Pipeline Stages
+* **Stage Caching**: Completed stage outputs (like generated videos, transcriptions, voiceover files, music files, and LLM edit plans) are cached in the React state.
+* **Granular Skips**: When rerunning a pipeline after a stage failure, the app sends previous outputs in the request body. The API detects these and skips the corresponding API calls, completing the step instantly.
+* **Dynamic Savings Dashboard**: A glassmorphic card displays skipped steps, cost savings, and duration savings before triggering the build.
+* **Input-Based Invalidation**: If the user modifies any input (photo, clips, hook text, tone, or mode), the cached outputs are automatically invalidated to prevent mismatch bugs.
 
 ---
 
-## Files Created
+## Files Updated
 
 | File | Purpose |
 |------|---------|
-| [globals.css](file:///d:/2026/reel_studio/app/globals.css) | Design system: dark theme, glassmorphism, gradients, animations |
-| [layout.tsx](file:///d:/2026/reel_studio/app/layout.tsx) | Root layout with Google Fonts + SEO metadata |
-| [page.tsx](file:///d:/2026/reel_studio/app/page.tsx) | Main SPA: upload zone, pipeline tracker, previews, execution trace |
-| [pipeline.ts](file:///d:/2026/reel_studio/lib/pipeline.ts) | Step definitions, types, tone options, cost estimates |
-| [proxy route.ts](file:///d:/2026/reel_studio/app/api/fal/proxy/route.ts) | Secure fal.ai proxy (hides FAL_KEY from client) |
-| [generate route.ts](file:///d:/2026/reel_studio/app/api/generate/route.ts) | SSE pipeline orchestrator — fires parallel steps, streams events |
-| [upload route.ts](file:///d:/2026/reel_studio/app/api/upload/route.ts) | Image upload → fal.ai storage URL |
+| [globals.css](file:///d:/2026/reel_studio/app/globals.css) | Custom styling rules |
+| [page.tsx](file:///d:/2026/reel_studio/app/page.tsx) | Pipeline tracker UI, cache states, invalidation hooks, savings display, resume checkbox |
+| [generate route.ts](file:///d:/2026/reel_studio/app/api/generate/route.ts) | Skip logic for Single Photo Mode stages |
+| [generate-multiclip route.ts](file:///d:/2026/reel_studio/app/api/generate-multiclip/route.ts) | Skip logic for Multi-Clip Mode stages, schema-compliant sequential composition track arrangement |
 
 ---
 
-## Pipeline Models
+## Pipeline Models Used
 
-| Step | fal Model | Cost |
-|------|-----------|------|
-| 1. Image → Video | `fal-ai/kling-video/v2.1/standard/image-to-video` | ~$0.28 |
-| 2. Voiceover | `fal-ai/elevenlabs/tts/eleven-v3` | ~$0.01 |
-| 3. Background Music | `fal-ai/minimax-music/v2` | ~$0.03 |
-| 4. Composition | `fal-ai/ffmpeg-api/merge-audio-video` | ~$0.01 |
-
-**Total estimated cost per reel: ~$0.33**
-
----
-
-## Key Features
-
-- **Live Pipeline Tracker**: 4-node tracker showing Queued → Running (elapsed timer) → Done (latency + cost)
-- **Cost Ticker**: Real-time "Cost so far: $X.XX · Time: Xs" display
-- **Progressive Previews**: Blurred image overlay while video generates, animated waveforms while audio generates
-- **Execution Trace**: Collapsible table showing model, input, duration, cost, status per call
-- **Error Handling**: Step-level error display with graceful partial results
-- **Caching**: Hash-based in-memory cache prevents duplicate API calls on re-submit
-- **File Validation**: Client-side type/size check before uploading
+| Stage | fal Model | Estimated Cost |
+|------|-----------|----------------|
+| **Image → Video** | `fal-ai/kling-video/v2.1/standard/image-to-video` | ~$0.28 / single |
+| **Captioning** | `fal-ai/florence-2-large/more-detailed-caption` | ~$0.005 / clip |
+| **Editorial Planning** | `google/gemini-2.5-flash` (via OpenRouter) | ~$0.002 / plan |
+| **Voiceover** | `fal-ai/elevenlabs/tts/eleven-v3` | ~$0.01 / reel |
+| **Background Music** | `cassetteai/music-generator` | ~$0.02 / reel |
+| **Composition** | `fal-ai/ffmpeg-api/compose` | ~$0.02 / composition |
 
 ---
 
 ## Verification
 
-- ✅ `npm run build` — passes without errors
-- ✅ UI renders correctly in browser at `http://localhost:3000`
-- ✅ Dark theme, glassmorphism, gradient effects all working
-
-## Next Steps
-
-1. Add your `FAL_KEY` to `.env.local`
-2. Run `npm run dev` and test with a real photo
-3. Optionally deploy to Vercel
+* ✅ `npm run build` completed successfully without any compilation errors.
+* ✅ Staged, committed, and pushed to your GitHub repository: `https://github.com/Vidharshan/reel_studio`.
