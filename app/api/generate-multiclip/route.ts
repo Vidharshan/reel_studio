@@ -86,52 +86,57 @@ export async function POST(request: NextRequest) {
         // 1b. Call frame extraction & Florence captioning in parallel per video clip
         const captionResults = await Promise.allSettled(
           videoUrls.map(async (url, idx) => {
-            sendEvent(controller, encoder, "step", {
-              step: 1,
-              name: "Pre-process & Caption",
-              modelId: "fal-ai/florence-2-large/more-detailed-caption",
-              status: "running",
-              startedAt: step1Start,
-              inputSummary: `Clip ${idx + 1}: Extracting frame...`,
-            });
+            try {
+              sendEvent(controller, encoder, "step", {
+                step: 1,
+                name: "Pre-process & Caption",
+                modelId: "fal-ai/florence-2-large/more-detailed-caption",
+                status: "running",
+                startedAt: step1Start,
+                inputSummary: `Clip ${idx + 1}: Extracting frame...`,
+              });
 
-            // Extract middle frame
-            const frameResult = await (fal.subscribe as any)("fal-ai/ffmpeg-api/extract-frame", {
-              input: {
-                video_url: url,
-                frame_type: "middle"
-              },
-              logs: true,
-            });
-            const frameUrl = frameResult.data?.images?.[0]?.url || frameResult.data?.image?.url;
-            if (!frameUrl) {
-              throw new Error(`Failed to extract frame from Clip ${idx + 1}`);
+              // Extract middle frame
+              const frameResult = await (fal.subscribe as any)("fal-ai/ffmpeg-api/extract-frame", {
+                input: {
+                  video_url: url,
+                  frame_type: "middle"
+                },
+                logs: true,
+              });
+              const frameUrl = frameResult.data?.images?.[0]?.url || frameResult.data?.image?.url;
+              if (!frameUrl) {
+                throw new Error(`Failed to extract frame from Clip ${idx + 1}`);
+              }
+
+              sendEvent(controller, encoder, "step", {
+                step: 1,
+                name: "Pre-process & Caption",
+                modelId: "fal-ai/florence-2-large/more-detailed-caption",
+                status: "running",
+                startedAt: step1Start,
+                inputSummary: `Clip ${idx + 1}: Generating detailed caption...`,
+              });
+
+              // Get caption
+              const captionResult = await (fal.subscribe as any)("fal-ai/florence-2-large/more-detailed-caption", {
+                input: {
+                  image_url: frameUrl,
+                },
+                logs: true,
+              });
+
+              const caption =
+                captionResult.data?.results?.[0] ||
+                captionResult.data?.caption ||
+                captionResult.data?.text ||
+                `A video clip showing scene content.`;
+
+              return { index: idx, caption, url };
+            } catch (err) {
+              console.error(`Error in clip ${idx + 1} processing:`, err);
+              throw err;
             }
-
-            sendEvent(controller, encoder, "step", {
-              step: 1,
-              name: "Pre-process & Caption",
-              modelId: "fal-ai/florence-2-large/more-detailed-caption",
-              status: "running",
-              startedAt: step1Start,
-              inputSummary: `Clip ${idx + 1}: Generating detailed caption...`,
-            });
-
-            // Get caption
-            const captionResult = await (fal.subscribe as any)("fal-ai/florence-2-large/more-detailed-caption", {
-              input: {
-                image_url: frameUrl,
-              },
-              logs: true,
-            });
-
-            const caption =
-              captionResult.data?.results?.[0] ||
-              captionResult.data?.caption ||
-              captionResult.data?.text ||
-              `A video clip showing scene content.`;
-
-            return { index: idx, caption, url };
           })
         );
 
@@ -285,7 +290,7 @@ Do not output any other text or wrapper. Return raw JSON.`;
           (fal.subscribe as any)("cassetteai/music-generator", {
             input: {
               prompt: toneConfig.musicPrompt,
-              duration: 9,
+              duration: 30, // stable 30s duration, trimmed during composition
             },
             logs: true,
           }),
@@ -304,6 +309,13 @@ Do not output any other text or wrapper. Return raw JSON.`;
 
         const musicOk = musicResult.status === "fulfilled";
         const ttsOk = ttsResult.status === "fulfilled";
+
+        if (musicResult.status === "rejected") {
+          console.error("Music generation failed:", musicResult.reason);
+        }
+        if (ttsResult.status === "rejected") {
+          console.error("TTS generation failed:", ttsResult.reason);
+        }
 
         const musicUrl = musicOk
           ? (musicResult.value.data as any)?.audio_file?.url || (musicResult.value.data as any)?.audio?.url
@@ -345,28 +357,41 @@ Do not output any other text or wrapper. Return raw JSON.`;
         const ctaClipUrl = processedClips[editPlan.cta.clipIndex]?.url || videoUrls[0];
 
         try {
-          // Construct composition timeline tracks
+          // Construct composition timeline tracks according to fal-ai/ffmpeg-api/compose schema
+          // timestamp and duration must be in milliseconds inside the keyframes array objects
           const tracks: any[] = [
             {
               id: "hook_video",
               type: "video",
-              timestamp: 0,
-              duration: 3,
-              keyframes: [{ url: hookClipUrl }]
+              keyframes: [
+                {
+                  url: hookClipUrl,
+                  timestamp: 0,
+                  duration: 3000
+                }
+              ]
             },
             {
               id: "body_video",
               type: "video",
-              timestamp: 3,
-              duration: 4,
-              keyframes: [{ url: bodyClipUrl }]
+              keyframes: [
+                {
+                  url: bodyClipUrl,
+                  timestamp: 3000,
+                  duration: 4000
+                }
+              ]
             },
             {
               id: "cta_video",
               type: "video",
-              timestamp: 7,
-              duration: 2,
-              keyframes: [{ url: ctaClipUrl }]
+              keyframes: [
+                {
+                  url: ctaClipUrl,
+                  timestamp: 7000,
+                  duration: 2000
+                }
+              ]
             }
           ];
 
@@ -375,9 +400,13 @@ Do not output any other text or wrapper. Return raw JSON.`;
             tracks.push({
               id: "voiceover_audio",
               type: "audio",
-              timestamp: 0,
-              duration: 9,
-              keyframes: [{ url: voiceoverUrl }]
+              keyframes: [
+                {
+                  url: voiceoverUrl,
+                  timestamp: 0,
+                  duration: 9000
+                }
+              ]
             });
           }
 
@@ -386,9 +415,13 @@ Do not output any other text or wrapper. Return raw JSON.`;
             tracks.push({
               id: "music_audio",
               type: "audio",
-              timestamp: 0,
-              duration: 9,
-              keyframes: [{ url: musicUrl }]
+              keyframes: [
+                {
+                  url: musicUrl,
+                  timestamp: 0,
+                  duration: 9000
+                }
+              ]
             });
           }
 
