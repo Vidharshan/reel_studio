@@ -138,6 +138,66 @@ export const TONE_OPTIONS: { value: ToneStyle; label: string; musicPrompt: strin
   },
 ];
 
+/* ========================================
+   Brand Template Catalog
+   A template drives the reel's look & feel.
+   Today each template maps to an existing
+   ToneStyle (music prompt + edit flavor).
+   Future: full template "DNA" per reel-studio-viral-templates.md.
+   ======================================== */
+
+export interface Template {
+  id: string;
+  name: string;
+  tagline: string;
+  tone: ToneStyle;
+  vibe: string; // CSS gradient used for the card thumbnail
+  tags: string[];
+}
+
+export const TEMPLATE_CATALOG: Template[] = [
+  {
+    id: "signature",
+    name: "Signature",
+    tagline: "Cinematic brand statement",
+    tone: "cinematic",
+    vibe: "linear-gradient(135deg, #8b5cf6, #6366f1)",
+    tags: ["cinematic", "epic"],
+  },
+  {
+    id: "ugc",
+    name: "UGC Authentic",
+    tagline: "Raw, relatable, real",
+    tone: "ugc",
+    vibe: "linear-gradient(135deg, #f59e0b, #f43f5e)",
+    tags: ["casual", "lo-fi"],
+  },
+  {
+    id: "showcase",
+    name: "Showcase",
+    tagline: "Clean, credible product demo",
+    tone: "product_demo",
+    vibe: "linear-gradient(135deg, #22d3ee, #10b981)",
+    tags: ["clean", "demo"],
+  },
+  {
+    id: "energy",
+    name: "High-Energy",
+    tagline: "Scroll-stopping momentum",
+    tone: "energetic",
+    vibe: "linear-gradient(135deg, #f43f5e, #8b5cf6)",
+    tags: ["punch", "edm"],
+  },
+  {
+    id: "calm",
+    name: "Calm Story",
+    tagline: "Ambient, mindful narrative",
+    tone: "calm",
+    vibe: "linear-gradient(135deg, #10b981, #06b6d4)",
+    tags: ["ambient", "soft"],
+  },
+];
+
 /* Estimated costs per step for display (actual cost comes from response) */
 export const ESTIMATED_COSTS: Record<number, number> = {
   1: 0.28,
