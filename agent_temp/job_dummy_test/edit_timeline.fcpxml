@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE fcpxml SYSTEM "fcpxml.dtd">
+<fcpxml version="1.9">
+    <resources>
+        <format id="r1" name="FFVideoFormat1080p2997" frameDuration="1001/30000s"/>
+    <asset id="a-roll" name="a_roll" src="file:///D:/2026/reel_studio/agent/dummy_test.mp4" duration="3600s" hasVideo="1" hasAudio="1"/>
+    <asset id="b-roll-0" name="broll_0" src="file:///D:/2026/reel_studio/agent_temp/job_dummy_test/broll_coffee_pouring.mp4" duration="600s" hasVideo="1"/>
+    <asset id="b-roll-1" name="broll_1" src="file:///D:/2026/reel_studio/agent_temp/job_dummy_test/broll_typing_on_laptop.mp4" duration="600s" hasVideo="1"/>
+    </resources>
+    <library>
+        <event name="Automated Agent Event">
+            <project name="AI_Generated_Reel">
+                <sequence duration="5.000s" format="r1" tcStart="0s">
+                    <spine>
+                        
+        <asset-clip ref="a-roll" offset="0.000s" name="A-Roll Segment 1" start="0.000s" duration="5.000s">
+            
+            <asset-clip ref="b-roll-0" lane="1" offset="1.000s" name="B-Roll Overlay" start="0s" duration="1.000s"/>
+<asset-clip ref="b-roll-1" lane="1" offset="3.000s" name="B-Roll Overlay" start="0s" duration="1.000s"/>
+        </asset-clip>
+        
+                    </spine>
+                </sequence>
+            </project>
+        </event>
+    </library>
+</fcpxml>

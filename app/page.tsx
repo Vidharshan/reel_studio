@@ -1,736 +1,342 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
-import {
-  STEP_DEFINITIONS,
-  MULTICLIP_STEP_DEFINITIONS,
-  TEMPLATE_CATALOG,
-  type StepEvent,
-  type ToneStyle,
-  type PipelineMode,
-} from "@/lib/pipeline";
-import {
-  BrandBar,
-  ModeToggle,
-  TemplateCatalog,
-  UploadZone,
-  ClipGrid,
-  HookInput,
-  ResumeCard,
-  GenerateButton,
-  PipelineStepper,
-  PreviewCard,
-  Waveform,
-  FinalResult,
-  TracePanel,
-  ErrorBanner,
-} from "@/components/studio-ui";
-import {
-  IconFilm,
-  IconMic,
-  IconMusic,
-  IconScissors,
-  IconScript,
-  IconScan,
-  IconLayers,
-} from "@/components/icons";
+import { useState, useEffect } from "react";
 
-/* ==============================
-   Types
-   ============================== */
-interface StepState extends StepEvent {
-  elapsedMs: number;
-}
+export default function WaitlistPage() {
+  const [email, setEmail] = useState("");
+  const [emailSecondary, setEmailSecondary] = useState("");
+  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [statusSecondary, setStatusSecondary] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [waitlistCount, setWaitlistCount] = useState(148);
 
-/* ==============================
-   Main App Component
-   ============================== */
-export default function ReelStudio() {
-  /* --- State --- */
-  const [mode, setMode] = useState<PipelineMode>("single");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [videoFiles, setVideoFiles] = useState<File[]>([]);
-  const [videoPreviews, setVideoPreviews] = useState<string[]>([]);
-  const [videoUrls, setVideoUrls] = useState<string[]>([]);
-  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
-  const [hookText, setHookText] = useState("");
-  const [tone, setTone] = useState<ToneStyle>("cinematic");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [steps, setSteps] = useState<Record<number, StepState>>({});
-  const [finalResult, setFinalResult] = useState<{
-    videoUrl?: string;
-    voiceoverUrl?: string;
-    musicUrl?: string;
-    finalUrl?: string;
-    partial?: boolean;
-  } | null>(null);
-  const [pipelineError, setPipelineError] = useState<string | null>(null);
-  const [traceOpen, setTraceOpen] = useState(false);
+  // Mockup Simulation States
+  const [currentWordIdx, setCurrentWordIdx] = useState(0);
+  const [consoleLineIdx, setConsoleLineIdx] = useState(0);
 
-  /* --- Cache / Resume Pipeline State --- */
-  const [resumePipeline, setResumePipeline] = useState(true);
-  const [cachedVideoUrl, setCachedVideoUrl] = useState<string | null>(null);
-  const [cachedVoiceoverUrl, setCachedVoiceoverUrl] = useState<string | null>(null);
-  const [cachedMusicUrl, setCachedMusicUrl] = useState<string | null>(null);
-  const [cachedCaptions, setCachedCaptions] = useState<any[] | null>(null);
-  const [cachedEditPlan, setCachedEditPlan] = useState<any | null>(null);
+  const mockupWords = [
+    { text: "CREATE", sub: "0.2s · A-roll" },
+    { text: "REELS", sub: "0.6s · Hook" },
+    { text: "THAT", sub: "0.9s · Scale 1.15x" },
+    { text: "ACTUALLY", sub: "1.4s · Bold + Color" },
+    { text: "PERFORM", sub: "1.9s · CTA" }
+  ];
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const consoleLines = [
+    { type: "info", text: "Probing input video duration..." },
+    { type: "info", text: "Starting local Whisper transcription (base)..." },
+    { type: "success", text: "Bypassed CUDA; transcription completed on CPU." },
+    { type: "info", text: "DeepSeek-R1 editorial planning initiated..." },
+    { type: "success", text: "Creative plan: 3 zoom cuts, 1 B-roll suggestion, 5 highlights." },
+    { type: "info", text: "Compiling video headlessly with FFmpeg..." },
+    { type: "success", text: "Final vertical reel generated: 1080x1920 @ 60fps." }
+  ];
 
-  /* --- Elapsed timer --- */
   useEffect(() => {
-    if (isGenerating) {
-      timerRef.current = setInterval(() => {
-        setSteps((prev) => {
-          const updated = { ...prev };
-          for (const key of Object.keys(updated)) {
-            const step = updated[Number(key)];
-            if (step.status === "running" && step.startedAt) {
-              updated[Number(key)] = {
-                ...step,
-                elapsedMs: Date.now() - step.startedAt,
-              };
-            }
-          }
-          return updated;
-        });
-      }, 100);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
+    // Cycle mockup text
+    const textInterval = setInterval(() => {
+      setCurrentWordIdx((prev) => (prev + 1) % mockupWords.length);
+    }, 1200);
+
+    // Cycle console simulator
+    const consoleInterval = setInterval(() => {
+      setConsoleLineIdx((prev) => (prev + 1) % (consoleLines.length + 1));
+    }, 2000);
+
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      clearInterval(textInterval);
+      clearInterval(consoleInterval);
     };
-  }, [isGenerating]);
-
-  // Clear cache if inputs change to prevent mismatched stages
-  useEffect(() => {
-    setCachedVideoUrl(null);
-    setCachedVoiceoverUrl(null);
-    setCachedMusicUrl(null);
-  }, [imageUrl]);
-
-  useEffect(() => {
-    setCachedCaptions(null);
-    setCachedEditPlan(null);
-    setCachedVoiceoverUrl(null);
-    setCachedMusicUrl(null);
-  }, [videoUrls]);
-
-  useEffect(() => {
-    setCachedVideoUrl(null);
-    setCachedVoiceoverUrl(null);
-    setCachedEditPlan(null);
-  }, [hookText]);
-
-  useEffect(() => {
-    setCachedMusicUrl(null);
-    setCachedEditPlan(null);
-  }, [tone]);
-
-  useEffect(() => {
-    setCachedVideoUrl(null);
-    setCachedVoiceoverUrl(null);
-    setCachedMusicUrl(null);
-    setCachedCaptions(null);
-    setCachedEditPlan(null);
-  }, [mode]);
-
-  /* --- File handling --- */
-  const handleFileSelect = useCallback(async (file: File) => {
-    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-    if (!validTypes.includes(file.type)) {
-      alert("Invalid file type. Please use JPEG, PNG, WebP, or GIF.");
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      alert("File too large. Maximum 10MB.");
-      return;
-    }
-
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-
-    // Upload to server
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
-      if (data.url) {
-        setImageUrl(data.url);
-      } else {
-        alert("Upload failed: " + (data.error || "Unknown error"));
-        setImageFile(null);
-        setImagePreview(null);
-      }
-    } catch {
-      alert("Upload failed. Please try again.");
-      setImageFile(null);
-      setImagePreview(null);
-    } finally {
-      setIsUploading(false);
-    }
   }, []);
 
-  const handleVideoSelect = useCallback(async (files: FileList) => {
-    const newFiles = Array.from(files);
+  const handleWaitlistSubmit = async (e: React.FormEvent, isSecondary = false) => {
+    e.preventDefault();
+    const targetEmail = isSecondary ? emailSecondary : email;
+    const setTargetStatus = isSecondary ? setStatusSecondary : setStatus;
 
-    if (videoFiles.length + newFiles.length > 5) {
-      alert("You can upload a maximum of 5 clips.");
+    if (!targetEmail || !targetEmail.includes("@")) {
+      setTargetStatus("error");
       return;
     }
 
-    const validTypes = ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v", "image/gif"];
-    for (const file of newFiles) {
-      if (!validTypes.includes(file.type)) {
-        alert(`Invalid type for ${file.name}. Only MP4, MOV, WebM, or GIF are allowed.`);
-        return;
-      }
-      if (file.size > 20 * 1024 * 1024) {
-        alert(`${file.name} is too large. Max 20MB.`);
-        return;
-      }
-    }
-
-    setIsUploadingVideo(true);
-    try {
-      const uploadedUrls: string[] = [];
-      const previews: string[] = [];
-
-      for (const file of newFiles) {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await fetch("/api/upload-video", { method: "POST", body: formData });
-        const data = await res.json();
-        if (data.url) {
-          uploadedUrls.push(data.url);
-          previews.push(URL.createObjectURL(file));
-        } else {
-          alert(`Failed to upload ${file.name}: ${data.error || "Unknown error"}`);
-        }
-      }
-
-      setVideoFiles((prev) => [...prev, ...newFiles]);
-      setVideoPreviews((prev) => [...prev, ...previews]);
-      setVideoUrls((prev) => [...prev, ...uploadedUrls]);
-    } catch {
-      alert("Failed to upload videos. Please try again.");
-    } finally {
-      setIsUploadingVideo(false);
-    }
-  }, [videoFiles]);
-
-  const handleRemoveVideo = (index: number) => {
-    setVideoFiles((prev) => prev.filter((_, i) => i !== index));
-    setVideoPreviews((prev) => prev.filter((_, i) => i !== index));
-    setVideoUrls((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleRemoveImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
-    setImageUrl(null);
-  };
-
-  /* --- Generate --- */
-  const handleGenerate = async () => {
-    if (mode === "single") {
-      if (!imageUrl || !hookText.trim()) return;
-    } else {
-      if (videoUrls.length === 0 || !hookText.trim()) return;
-    }
-
-    setIsGenerating(true);
-    setFinalResult(null);
-    setPipelineError(null);
-    setSteps({});
-    setTraceOpen(false);
-
-    // Initialize all steps as idle
-    const initialSteps: Record<number, StepState> = {};
-    const stepDefs = mode === "single" ? STEP_DEFINITIONS : MULTICLIP_STEP_DEFINITIONS;
-    stepDefs.forEach((def) => {
-      initialSteps[def.step] = {
-        step: def.step,
-        name: def.name,
-        modelId: def.modelId,
-        status: "queued",
-        elapsedMs: 0,
-      };
-    });
-    setSteps(initialSteps);
+    setTargetStatus("submitting");
 
     try {
-      const endpoint = mode === "single" ? "/api/generate" : "/api/generate-multiclip";
-      const payload: Record<string, any> = mode === "single"
-        ? { imageUrl, hookText: hookText.trim(), tone }
-        : { videoUrls, hookText: hookText.trim(), tone };
-
-      if (resumePipeline) {
-        if (mode === "single") {
-          if (cachedVideoUrl) payload.existingVideoUrl = cachedVideoUrl;
-          if (cachedVoiceoverUrl) payload.existingVoiceoverUrl = cachedVoiceoverUrl;
-          if (cachedMusicUrl) payload.existingMusicUrl = cachedMusicUrl;
-        } else {
-          if (cachedCaptions) payload.existingCaptions = cachedCaptions;
-          if (cachedEditPlan) payload.existingEditPlan = cachedEditPlan;
-          if (cachedVoiceoverUrl) payload.existingVoiceoverUrl = cachedVoiceoverUrl;
-          if (cachedMusicUrl) payload.existingMusicUrl = cachedMusicUrl;
-        }
-      }
-
-      const response = await fetch(endpoint, {
+      const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ email: targetEmail })
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to start pipeline");
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      if (!reader) throw new Error("No response stream");
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        let eventType = "";
-        let eventData = "";
-
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            eventType = line.slice(7);
-          } else if (line.startsWith("data: ")) {
-            eventData = line.slice(6);
-
-            if (eventType && eventData) {
-              try {
-                const data = JSON.parse(eventData);
-                handleSSEEvent(eventType, data);
-              } catch {
-                // skip malformed
-              }
-              eventType = "";
-              eventData = "";
-            }
-          }
+      if (res.ok) {
+        const data = await res.json();
+        setTargetStatus("success");
+        if (data.count) {
+          setWaitlistCount(data.count + 148); // add our baseline waitlist count
         }
+        if (isSecondary) setEmailSecondary("");
+        else setEmail("");
+      } else {
+        setTargetStatus("error");
       }
-    } catch (err) {
-      const error = err as Error;
-      setPipelineError(error.message);
-    } finally {
-      setIsGenerating(false);
+    } catch {
+      setTargetStatus("error");
     }
   };
 
-  const handleSSEEvent = (type: string, data: Record<string, unknown>) => {
-    switch (type) {
-      case "step": {
-        const stepData = data as any;
-        setSteps((prev) => ({
-          ...prev,
-          [stepData.step]: {
-            ...prev[stepData.step],
-            ...stepData,
-            elapsedMs: stepData.durationMs || prev[stepData.step]?.elapsedMs || 0,
-          },
-        }));
-
-        // Cache completed steps
-        if (stepData.status === "completed") {
-          if (mode === "single") {
-            if (stepData.step === 1 && stepData.resultUrl) {
-              setCachedVideoUrl(stepData.resultUrl);
-            }
-            if (stepData.step === 2 && stepData.resultUrl) {
-              setCachedVoiceoverUrl(stepData.resultUrl);
-            }
-            if (stepData.step === 3 && stepData.resultUrl) {
-              setCachedMusicUrl(stepData.resultUrl);
-            }
-          } else {
-            if (stepData.step === 1 && stepData.processedClips) {
-              setCachedCaptions(stepData.processedClips);
-            }
-            if (stepData.step === 2 && stepData.editPlan) {
-              setCachedEditPlan(stepData.editPlan);
-            }
-            if (stepData.step === 3) {
-              if (stepData.voiceoverUrl) setCachedVoiceoverUrl(stepData.voiceoverUrl);
-              if (stepData.musicUrl) setCachedMusicUrl(stepData.musicUrl);
-            }
-          }
-        }
-        break;
-      }
-      case "complete": {
-        setFinalResult(data as typeof finalResult);
-        break;
-      }
-      case "cached": {
-        setFinalResult(data as typeof finalResult);
-        // Mark all steps as completed instantly
-        setSteps((prev) => {
-          const updated = { ...prev };
-          for (const key of Object.keys(updated)) {
-            updated[Number(key)] = {
-              ...updated[Number(key)],
-              status: "completed",
-              durationMs: 0,
-              costUsd: 0,
-              elapsedMs: 0,
-            };
-          }
-          return updated;
-        });
-        break;
-      }
-      case "pipeline_error": {
-        setPipelineError(data.message as string);
-        break;
-      }
-    }
-  };
-
-  /* --- Computed values --- */
-  const totalCost = Object.values(steps).reduce(
-    (sum, s) => sum + (s.costUsd || 0),
-    0
-  );
-  const totalTime = Object.values(steps).reduce(
-    (sum, s) => sum + (s.status === "running" ? s.elapsedMs : s.durationMs || 0),
-    0
-  );
-
-  const canGenerate =
-    mode === "single"
-      ? !!imageUrl && !!hookText.trim() && !isGenerating && !isUploading
-      : videoUrls.length > 0 && !!hookText.trim() && !isGenerating && !isUploadingVideo;
-
-  // Compute what can be skipped and the savings
-  const hasCache = mode === "single"
-    ? (!!cachedVideoUrl || !!cachedVoiceoverUrl || !!cachedMusicUrl)
-    : (!!cachedCaptions || !!cachedEditPlan || !!cachedVoiceoverUrl || !!cachedMusicUrl);
-
-  let savedCost = 0;
-  let savedTimeSec = 0;
-  let skippedStepsCount = 0;
-
-  if (hasCache && resumePipeline) {
-    if (mode === "single") {
-      if (cachedVideoUrl) {
-        savedCost += 0.28;
-        savedTimeSec += 15;
-        skippedStepsCount++;
-      }
-      if (cachedVoiceoverUrl) {
-        const charCount = hookText.length;
-        savedCost += Math.max((charCount / 1000) * 0.1, 0.01);
-        savedTimeSec += 2;
-        skippedStepsCount++;
-      }
-      if (cachedMusicUrl) {
-        savedCost += 0.02;
-        savedTimeSec += 5;
-        skippedStepsCount++;
-      }
-    } else {
-      if (cachedCaptions) {
-        savedCost += videoUrls.length * 0.005;
-        savedTimeSec += videoUrls.length * 2;
-        skippedStepsCount++;
-      }
-      if (cachedEditPlan) {
-        savedCost += 0.002;
-        savedTimeSec += 2;
-        skippedStepsCount++;
-      }
-      if (cachedVoiceoverUrl) {
-        // approximate char count of combined voiceover
-        const editPlanText = cachedEditPlan
-          ? `${cachedEditPlan.hook.voiceover} ${cachedEditPlan.body.voiceover} ${cachedEditPlan.cta.voiceover}`
-          : hookText;
-        savedCost += Math.max((editPlanText.length / 1000) * 0.1, 0.01);
-        savedTimeSec += 2;
-        skippedStepsCount++;
-      }
-      if (cachedMusicUrl) {
-        savedCost += 0.02;
-        savedTimeSec += 5;
-        skippedStepsCount++;
-      }
-    }
-  }
-
-  /* --- Preview helpers --- */
-  type PreviewState = "waiting" | "generating" | "done" | "error";
-  const previewStatus = (st?: StepState): PreviewState => {
-    if (!st) return "waiting";
-    switch (st.status) {
-      case "completed": return "done";
-      case "running": return "generating";
-      case "failed": return "error";
-      default: return "waiting";
-    }
-  };
-  const previewLabel = (st?: StepState): string => {
-    if (!st) return "Waiting";
-    switch (st.status) {
-      case "completed": return "Ready";
-      case "running": return "Processing…";
-      case "failed": return "Failed";
-      default: return "Waiting";
-    }
-  };
-
-  const videoStep = steps[1];
-  const voiceStep = steps[mode === "single" ? 2 : 3];
-  const musicStep = steps[mode === "single" ? 3 : 4];
-  const storyStep = steps[2];
-  const hasSteps = Object.keys(steps).length > 0;
-
-  const stepIcons =
-    mode === "single"
-      ? [IconFilm, IconMic, IconMusic, IconScissors]
-      : [IconScan, IconScript, IconMusic, IconScissors];
-
-  const genLabel = isGenerating
-    ? "Generating"
-    : isUploading
-    ? "Uploading…"
-    : isUploadingVideo
-    ? "Uploading clips…"
-    : "Generate Reel";
-
-  /* ==============================
-     Render
-     ============================== */
   return (
-    <div className="app">
-      <BrandBar />
+    <div className="waitlist-wrapper">
+      {/* Navigation */}
+      <nav className="waitlist-nav">
+        <div className="waitlist-logo">
+          <div className="waitlist-logo-mark">RT</div>
+          <span>Reeltrix</span>
+        </div>
+        <div className="waitlist-badge">
+          <div className="waitlist-badge-dot"></div>
+          <span>Engine v1.0 Live</span>
+        </div>
+      </nav>
 
-      <div className="app-shell">
-        {/* ── Config rail ─────────────────── */}
-        <aside className="rail">
-          <ModeToggle
-            mode={mode}
-            disabled={isGenerating}
-            onChange={(m) => {
-              setMode(m);
-              setPipelineError(null);
-              setSteps({});
-              setFinalResult(null);
-            }}
-          />
+      {/* Main Content */}
+      <main className="waitlist-main">
+        {/* Section 1: Hero */}
+        <section className="waitlist-hero">
+          <div className="waitlist-hero-content">
+            <h1 className="waitlist-headline">
+              Create reels that <br />
+              actually perform
+            </h1>
+            <p className="waitlist-subheadline">
+              AI-powered reel studio with templates built from what’s working right now. From raw footage to a ready-to-post short in 60 seconds.
+            </p>
 
-          <TemplateCatalog
-            templates={TEMPLATE_CATALOG}
-            selected={tone}
-            disabled={isGenerating}
-            onSelect={(t) => setTone(t)}
-          />
-
-          {mode === "single" ? (
-            <UploadZone
-              label="Your photo"
-              hint="JPEG, PNG, WebP, GIF · Max 10MB"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              preview={imagePreview}
-              isUploading={isUploading}
-              disabled={isGenerating}
-              onSelect={(files) => {
-                const f = files?.[0];
-                if (f) handleFileSelect(f);
-              }}
-              onRemove={handleRemoveImage}
-            />
-          ) : (
-            <>
-              <UploadZone
-                label={`Raw clips (${videoFiles.length}/5)`}
-                hint="MP4, MOV, WebM, GIF · Max 20MB each"
-                accept="video/mp4,video/quicktime,video/webm,video/x-m4v,image/gif"
-                multiple
-                isUploading={isUploadingVideo}
-                disabled={isGenerating}
-                onSelect={(files) => {
-                  if (files) handleVideoSelect(files);
-                }}
-              />
-              {videoPreviews.length > 0 && (
-                <ClipGrid previews={videoPreviews} onRemove={handleRemoveVideo} />
+            <div className="waitlist-form-block">
+              {status === "success" ? (
+                <div style={{
+                  padding: "16px",
+                  backgroundColor: "#00E6761A",
+                  border: "1px solid rgba(0, 230, 118, 0.3)",
+                  borderRadius: "8px",
+                  color: "#00E676",
+                  fontSize: "0.95rem",
+                  fontWeight: 500
+                }}>
+                  ✓ You've been added to the priority waitlist!
+                </div>
+              ) : (
+                <form onSubmit={(e) => handleWaitlistSubmit(e, false)} className="waitlist-form">
+                  <div className="waitlist-input-wrapper">
+                    <input
+                      type="email"
+                      placeholder="Enter your email address"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="waitlist-input"
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="waitlist-btn" disabled={status === "submitting"}>
+                    {status === "submitting" ? "Joining..." : "Join Waitlist"}
+                  </button>
+                </form>
               )}
-            </>
-          )}
+              {status === "error" && (
+                <p style={{ color: "#F87171", fontSize: "0.82rem", marginTop: "-4px" }}>
+                  Please enter a valid email address.
+                </p>
+              )}
+              <div className="waitlist-trust-line">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span>Join {waitlistCount} creators already on the waitlist. No spam. Only launch updates.</span>
+              </div>
+            </div>
+          </div>
 
-          <HookInput value={hookText} onChange={setHookText} maxLength={500} />
-
-          {hasCache && (
-            <ResumeCard
-              checked={resumePipeline}
-              onToggle={setResumePipeline}
-              skips={skippedStepsCount}
-              cost={savedCost}
-              timeSec={savedTimeSec}
-            />
-          )}
-
-          <GenerateButton
-            label={genLabel}
-            loading={isGenerating}
-            disabled={!canGenerate}
-            onClick={handleGenerate}
-          />
-
-          {pipelineError && <ErrorBanner message={pipelineError} />}
-        </aside>
-
-        {/* ── Stage ────────────────────────── */}
-        <main className="stage">
-          {hasSteps && (
-            <PipelineStepper
-              steps={steps}
-              definitions={mode === "single" ? STEP_DEFINITIONS : MULTICLIP_STEP_DEFINITIONS}
-              icons={stepIcons}
-              totalCost={totalCost}
-              totalTime={totalTime}
-            />
-          )}
-
-          {hasSteps && (
-            <section className="preview-grid fade-in">
-              <PreviewCard
-                icon={<IconFilm size={16} />}
-                title="Video"
-                status={previewStatus(videoStep)}
-                statusLabel={previewLabel(videoStep)}
-              >
-                {videoStep?.status === "completed" && videoStep.resultUrl ? (
-                  <video
-                    className="preview-video"
-                    src={videoStep.resultUrl}
-                    controls
-                    autoPlay
-                    muted
-                    loop
-                  />
-                ) : videoStep?.status === "running" ? (
-                  <div style={{ width: "100%", position: "relative" }}>
-                    {mode === "single" && imagePreview ? (
-                      <img className="preview-blur" src={imagePreview} alt="Processing" />
-                    ) : videoPreviews[0] ? (
-                      <video className="preview-blur" src={videoPreviews[0]} muted />
-                    ) : null}
-                    <div className="preview-blur-overlay">
-                      <IconFilm size={26} />
+          <div className="waitlist-hero-visual">
+            {/* Live Interactive CSS Dashboard Mockup */}
+            <div className="waitlist-mockup-card">
+              <div className="waitlist-mockup-header">
+                <div className="waitlist-mockup-dots">
+                  <div className="waitlist-mockup-dot active"></div>
+                  <div className="waitlist-mockup-dot"></div>
+                  <div className="waitlist-mockup-dot"></div>
+                </div>
+                <div className="waitlist-mockup-title">REELTRIX ENGINE PREVIEW</div>
+              </div>
+              <div className="waitlist-mockup-body">
+                {/* Visual Video Preview Screen */}
+                <div className="waitlist-mockup-screen">
+                  <div className="waitlist-mockup-video-indicator">
+                    <span>•</span> LIVE PREVIEW
+                  </div>
+                  <div className="waitlist-mockup-captions-preview">
+                    <div className="waitlist-mockup-word-highlight">
+                      {mockupWords[currentWordIdx].text}
+                    </div>
+                    <div className="waitlist-mockup-word-sub">
+                      {mockupWords[currentWordIdx].sub}
                     </div>
                   </div>
-                ) : (
-                  <div className="preview-skeleton" />
-                )}
-              </PreviewCard>
+                </div>
 
-              <PreviewCard
-                icon={<IconMic size={16} />}
-                title="Voiceover"
-                status={previewStatus(voiceStep)}
-                statusLabel={previewLabel(voiceStep)}
-              >
-                {voiceStep?.status === "completed" && voiceStep.resultUrl ? (
-                  <div className="preview-audio-wrap">
-                    <Waveform color="var(--brand-1)" />
-                    <audio className="preview-audio" src={voiceStep.resultUrl} controls />
+                {/* Simulated Timeline tracks */}
+                <div className="waitlist-mockup-timeline">
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                    <span className="waitlist-mockup-label">Audio & Cuts Track</span>
+                    <span className="waitlist-mockup-label">2.4s active</span>
                   </div>
-                ) : voiceStep?.status === "running" ? (
-                  <Waveform color="var(--brand-1)" animated />
-                ) : (
-                  <div className="preview-skeleton" />
-                )}
-              </PreviewCard>
-
-              <PreviewCard
-                icon={<IconMusic size={16} />}
-                title="Music"
-                status={previewStatus(musicStep)}
-                statusLabel={previewLabel(musicStep)}
-              >
-                {musicStep?.status === "completed" && musicStep.resultUrl ? (
-                  <div className="preview-audio-wrap">
-                    <Waveform color="var(--brand-3)" />
-                    <audio className="preview-audio" src={musicStep.resultUrl} controls />
-                  </div>
-                ) : musicStep?.status === "running" ? (
-                  <Waveform color="var(--brand-3)" animated />
-                ) : (
-                  <div className="preview-skeleton" />
-                )}
-              </PreviewCard>
-
-              {mode === "multiclip" && (
-                <PreviewCard
-                  icon={<IconLayers size={16} />}
-                  title="Storyboard & script"
-                  status={previewStatus(storyStep)}
-                  statusLabel={storyStep?.status === "completed" ? "Created" : previewLabel(storyStep)}
-                  className="preview-card--full"
-                >
-                  {storyStep?.status === "completed" && storyStep?.inputSummary ? (
-                    <div className="preview-story">
-                      <div className="preview-story-row">
-                        <strong>Mapping:</strong> {storyStep.inputSummary}
-                      </div>
-                      <div className="preview-story-row preview-story-quote">
-                        {steps[3]?.inputSummary || "Voiceover text ready"}
-                      </div>
+                  <div className="waitlist-mockup-track">
+                    <div className="waitlist-mockup-block" style={{ width: "30%", left: "0%" }}></div>
+                    <div className="waitlist-mockup-block" style={{ width: "25%", left: "38%" }}></div>
+                    <div className="waitlist-mockup-block" style={{ width: "20%", left: "70%" }}></div>
+                    {/* Playhead */}
+                    <div className="waitlist-mockup-playhead" style={{ left: `${(currentWordIdx / (mockupWords.length - 1)) * 90 + 5}%`, transition: "left 0.8s ease-in-out" }}>
+                      <div className="waitlist-mockup-playhead-cap"></div>
                     </div>
-                  ) : (
-                    <div className="preview-skeleton preview-skeleton--text">
-                      Edit plan will appear here
+                  </div>
+                </div>
+
+                {/* Simulated Engine Console */}
+                <div className="waitlist-mockup-console">
+                  {consoleLines.slice(0, consoleLineIdx).map((line, i) => (
+                    <div key={i} className="waitlist-mockup-console-line" style={{ marginBottom: "2px" }}>
+                      <span className="waitlist-mockup-console-prompt">&gt;</span>
+                      <span style={{ color: line.type === "success" ? "#00E676" : "#A1A1AA" }}>
+                        {line.text}
+                      </span>
+                    </div>
+                  ))}
+                  {consoleLineIdx === 0 && (
+                    <div className="waitlist-mockup-console-line">
+                      <span className="waitlist-mockup-console-prompt">&gt;</span>
+                      <span style={{ color: "#71717A" }}>Awaiting video import...</span>
                     </div>
                   )}
-                </PreviewCard>
-              )}
-            </section>
-          )}
-
-          {finalResult?.finalUrl && (
-            <div className="fade-in">
-              <FinalResult
-                result={finalResult}
-                onCopy={() => {
-                  navigator.clipboard.writeText(finalResult.finalUrl || "");
-                  alert("Link copied to clipboard!");
-                }}
-              />
+                </div>
+              </div>
             </div>
-          )}
+          </div>
+        </section>
 
-          {hasSteps && (
-            <TracePanel
-              open={traceOpen}
-              onToggle={() => setTraceOpen((v) => !v)}
-              steps={steps}
-              definitions={mode === "single" ? STEP_DEFINITIONS : MULTICLIP_STEP_DEFINITIONS}
-              callCount={Object.values(steps).filter((s) => s.status !== "idle").length}
-            />
-          )}
-        </main>
-      </div>
+        {/* Section 2: What it is */}
+        <section className="waitlist-intro-section">
+          <p className="waitlist-intro-text">
+            Reeltrix helps you turn ideas into <span>high-performing</span> short-form videos using proven viral templates and real-time insights on what works.
+          </p>
+        </section>
+
+        {/* Section 3: 3 Key Benefits */}
+        <section className="waitlist-benefits-section">
+          <h2 className="waitlist-section-title">Built for viral distribution</h2>
+          <div className="waitlist-benefits-grid">
+            {/* Benefit 1 */}
+            <div className="waitlist-benefit-card">
+              <div className="waitlist-benefit-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
+              <h3 className="waitlist-benefit-title">Viral Templates</h3>
+              <p className="waitlist-benefit-desc">
+                Templates built directly from hooks, structures, and pacing patterns that are currently performing well in the algorithm.
+              </p>
+            </div>
+
+            {/* Benefit 2 */}
+            <div className="waitlist-benefit-card">
+              <div className="waitlist-benefit-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+              </div>
+              <h3 className="waitlist-benefit-title">Instant Creation</h3>
+              <p className="waitlist-benefit-desc">
+                Go from a simple script outline or footage clips to a professionally paced, edited, and captioned reel in seconds.
+              </p>
+            </div>
+
+            {/* Benefit 3 */}
+            <div className="waitlist-benefit-card">
+              <div className="waitlist-benefit-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+              </div>
+              <h3 className="waitlist-benefit-title">Built-in Guidance</h3>
+              <p className="waitlist-benefit-desc">
+                Step-by-step guidance on high-retention hook structures, editing rhythm, sound effects, and kinetic layouts.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 4: Secondary Signup */}
+        <section className="waitlist-cta-section">
+          <h2 className="waitlist-cta-title">Secure early access today</h2>
+          <p className="waitlist-cta-sub">
+            Be the first to know when we open registration spots. Beta access will be granted in batches.
+          </p>
+
+          <div className="waitlist-form-block" style={{ margin: "0 auto" }}>
+            {statusSecondary === "success" ? (
+              <div style={{
+                padding: "16px",
+                backgroundColor: "#00E6761A",
+                border: "1px solid rgba(0, 230, 118, 0.3)",
+                borderRadius: "8px",
+                color: "#00E676",
+                fontSize: "0.95rem",
+                fontWeight: 500
+              }}>
+                ✓ You've been added to the priority waitlist!
+              </div>
+            ) : (
+              <form onSubmit={(e) => handleWaitlistSubmit(e, true)} className="waitlist-form">
+                <div className="waitlist-input-wrapper">
+                  <input
+                    type="email"
+                    placeholder="Enter your email address"
+                    value={emailSecondary}
+                    onChange={(e) => setEmailSecondary(e.target.value)}
+                    className="waitlist-input"
+                    required
+                  />
+                </div>
+                <button type="submit" className="waitlist-btn" disabled={statusSecondary === "submitting"}>
+                  {statusSecondary === "submitting" ? "Joining..." : "Join Waitlist"}
+                </button>
+              </form>
+            )}
+            {statusSecondary === "error" && (
+              <p style={{ color: "#F87171", fontSize: "0.82rem", marginTop: "-4px" }}>
+                Please enter a valid email address.
+              </p>
+            )}
+            <div className="waitlist-trust-line" style={{ justifyContent: "center" }}>
+              <span>No spam. Only launch updates.</span>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="waitlist-footer">
+        <div className="waitlist-footer-logo">
+          <div className="waitlist-logo-mark" style={{ width: "24px", height: "24px", borderRadius: "6px", fontSize: "0.8rem", boxShadow: "none" }}>RT</div>
+          <span>Reeltrix</span>
+        </div>
+        <div>
+          <span>&copy; 2026 Reeltrix. All rights reserved.</span>
+        </div>
+        <div className="waitlist-footer-links">
+          <a href="#" className="waitlist-footer-link" onClick={(e) => e.preventDefault()}>Privacy Policy</a>
+        </div>
+      </footer>
     </div>
   );
 }
