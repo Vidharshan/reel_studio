@@ -90,7 +90,7 @@ export function ModeToggle({
 }
 
 /* ==============================
-   Template Catalog
+   Template Catalog (Compact Dropdown)
    ============================== */
 export function TemplateCatalog({
   templates,
@@ -100,37 +100,87 @@ export function TemplateCatalog({
 }: {
   templates: Template[];
   selected: string;
-  onSelect: (tone: Template["tone"]) => void;
+  onSelect: (tone: string) => void;
   disabled?: boolean;
 }) {
   return (
     <section className="rail-section">
       <div className="rail-head">
-        <span className="rail-label">Brand template</span>
-        <span className="rail-note">Sets look &amp; feel</span>
+        <span className="rail-label">Template / Tone</span>
+        <span className="rail-note">Look &amp; feel</span>
       </div>
-      <div className="template-grid">
-        {templates.map((t) => {
-          const active = selected === t.tone;
+      <div style={{ position: "relative" }}>
+        <select
+          className="hook-input"
+          value={selected}
+          onChange={(e) => onSelect(e.target.value)}
+          disabled={disabled}
+          style={{
+            height: "40px",
+            padding: "0 12px",
+            fontSize: "13px",
+            fontWeight: 500,
+            borderRadius: "8px",
+            backgroundColor: "#0D0D10",
+            border: "1px solid #27272A",
+            color: "#FAFAFA",
+            width: "100%",
+            cursor: "pointer",
+            outline: "none",
+          }}
+        >
+          {templates.map((t) => (
+            <option key={t.id} value={t.tone} style={{ backgroundColor: "#111113", color: "#FAFAFA" }}>
+              {t.name} — {t.tagline}
+            </option>
+          ))}
+        </select>
+      </div>
+    </section>
+  );
+}
+
+/* ==============================
+   Speed Control
+   ============================== */
+export function SpeedControl({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (s: number) => void;
+  disabled?: boolean;
+}) {
+  const speeds = [1.0, 1.1, 1.25, 1.5];
+  return (
+    <section className="rail-section">
+      <div className="rail-head">
+        <span className="rail-label">Playback speed</span>
+        <span className="rail-note">{value}x multiplier</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
+        {speeds.map((s) => {
+          const active = value === s;
           return (
             <button
-              key={t.id}
+              key={s}
               type="button"
-              className={`template-card ${active ? "selected" : ""}`}
               disabled={disabled}
-              onClick={() => onSelect(t.tone)}
-              aria-pressed={active}
+              onClick={() => onChange(s)}
+              style={{
+                height: "34px",
+                borderRadius: "6px",
+                border: active ? "1px solid #00E676" : "1px solid #27272A",
+                backgroundColor: active ? "rgba(0, 230, 118, 0.12)" : "#0D0D10",
+                color: active ? "#00E676" : "#A1A1AA",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
             >
-              <span className="template-thumb" style={{ background: t.vibe }} />
-              <span className="template-info">
-                <span className="template-name">{t.name}</span>
-                <span className="template-tagline">{t.tagline}</span>
-              </span>
-              {active && (
-                <span className="template-check">
-                  <IconCheck size={12} />
-                </span>
-              )}
+              {s}x
             </button>
           );
         })}
@@ -275,7 +325,7 @@ export function ClipGrid({
 }
 
 /* ==============================
-   Hook Input
+   What is this video about? Input
    ============================== */
 export function HookInput({
   value,
@@ -289,7 +339,7 @@ export function HookInput({
   return (
     <section className="rail-section">
       <div className="rail-head">
-        <span className="rail-label">Hook / script</span>
+        <span className="rail-label">What is this video about?</span>
         <span className="rail-note">
           {value.length}/{maxLength}
         </span>
@@ -300,9 +350,9 @@ export function HookInput({
         onChange={(e) => onChange(e.target.value)}
         maxLength={maxLength}
         rows={3}
-        placeholder="e.g. This hidden gem changes everything about your morning routine&hellip;"
+        placeholder="e.g. Explaining how to build a SaaS landing page in 5 minutes with AI..."
       />
-      <p className="field-hint">AI writes the voiceover from this — keep it punchy.</p>
+      <p className="field-hint">Helps AI auto-cut filler, select B-roll, and format captions.</p>
     </section>
   );
 }

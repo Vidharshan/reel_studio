@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     fileUrls,
     hookText,
     tone = "cinematic",
+    videoSpeed = 1.0,
     brandKit,
     // Resume support
     existingSegments,
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
     fileUrls: { url: string; type: "video" | "image"; name: string }[];
     hookText: string;
     tone?: string;
+    videoSpeed?: number;
     brandKit?: BrandKit;
     existingSegments?: Segment[];
     existingEditPlan?: EditPlan;
@@ -558,7 +560,8 @@ Return STRICTLY a raw JSON object, no markdown, no backticks:
           const clipUrl = videoFiles[seg.sourceClipIndex]?.url;
           if (!clipUrl) continue;
 
-          const segDuration = seg.endSec - seg.startSec;
+          const rawDuration = seg.endSec - seg.startSec;
+          const effectiveDuration = rawDuration / videoSpeed;
 
           sendEvent(controller, encoder, "step", {
             step: 4,
@@ -566,11 +569,11 @@ Return STRICTLY a raw JSON object, no markdown, no backticks:
             modelId: "local/ffmpeg",
             status: "running",
             startedAt: step4Start,
-            inputSummary: `Trimming segment ${i + 1}/${segsToRender.length}: ${seg.startSec.toFixed(1)}s–${seg.endSec.toFixed(1)}s`,
+            inputSummary: `Trimming segment ${i + 1}/${segsToRender.length}: ${seg.startSec.toFixed(1)}s–${seg.endSec.toFixed(1)}s (${videoSpeed}x speed)`,
           });
 
           try {
-            const trimmedPath = await trimVideo(clipUrl, seg.startSec, seg.endSec);
+            const trimmedPath = await trimVideo(clipUrl, seg.startSec, seg.endSec, videoSpeed);
             trimmedFilePaths.push(trimmedPath);
 
             // If a B-roll is placed after this segment, queue it as a PiP overlay!
@@ -580,12 +583,12 @@ Return STRICTLY a raw JSON object, no markdown, no backticks:
             if (broll?.url) {
               brollOverlaysToApply.push({
                 brollUrl: broll.url,
-                startSec: Math.max(0, timelineCursor + segDuration - Math.min(1.5, segDuration / 2)),
-                durationSec: Math.min(broll.durationSec || 3, segDuration),
+                startSec: Math.max(0, timelineCursor + effectiveDuration - Math.min(1.5, effectiveDuration / 2)),
+                durationSec: Math.min(broll.durationSec || 3, effectiveDuration),
               });
             }
 
-            timelineCursor += segDuration;
+            timelineCursor += effectiveDuration;
           } catch (trimErr) {
             console.error(`Trim failed for segment ${i}:`, trimErr);
           }
@@ -668,7 +671,7 @@ Return STRICTLY a raw JSON object, no markdown, no backticks:
         let captionCursor = 0;
 
         for (const seg of segsToRender) {
-          const segDuration = seg.endSec - seg.startSec;
+          const segDuration = (seg.endSec - seg.startSec) / videoSpeed;
 
           // Use LLM-generated caption if available, otherwise use transcript
           const captionBlock = editPlan.captionBlocks?.find(

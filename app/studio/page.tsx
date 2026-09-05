@@ -664,7 +664,7 @@ export default function ReelStudio() {
             templates={TEMPLATE_CATALOG}
             selected={tone}
             disabled={isGenerating}
-            onSelect={(t) => setTone(t)}
+            onSelect={(t) => setTone(t as import("@/lib/pipeline").ToneStyle)}
           />
 
           {mode === "single" ? (

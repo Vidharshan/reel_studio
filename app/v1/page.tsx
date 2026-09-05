@@ -15,6 +15,7 @@ import { TEMPLATE_CATALOG } from "@/lib/pipeline";
 import {
   BrandBar,
   TemplateCatalog,
+  SpeedControl,
   HookInput,
   GenerateButton,
   PipelineStepper,
@@ -22,6 +23,7 @@ import {
   TracePanel,
   ErrorBanner,
 } from "@/components/studio-ui";
+import { TimelineEditor } from "@/components/timeline-editor";
 import {
   IconMic,
   IconMusic,
@@ -68,6 +70,7 @@ export default function V1Studio() {
   /* -- Pipeline state -- */
   const [hookText, setHookText] = useState("");
   const [tone, setTone] = useState("cinematic");
+  const [videoSpeed, setVideoSpeed] = useState(1.0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [steps, setSteps] = useState<Record<number, StepState>>({});
   const [finalResult, setFinalResult] = useState<Record<string, unknown> | null>(null);
@@ -154,10 +157,21 @@ export default function V1Studio() {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  /* -- Segment toggle -- */
+  /* -- Segment toggle & trim adjustment -- */
   const toggleSegment = (segId: string) => {
     setSegments((prev) =>
       prev.map((s) => (s.id === segId ? { ...s, isKept: !s.isKept, isFiller: !s.isKept ? false : s.isFiller } : s))
+    );
+  };
+
+  const updateSegmentTrim = (segId: string, newStart: number, newEnd: number) => {
+    setSegments((prev) =>
+      prev.map((s) => {
+        if (s.id !== segId) return s;
+        const validStart = Math.max(0, Math.min(newStart, s.endSec - 0.2));
+        const validEnd = Math.max(validStart + 0.2, newEnd);
+        return { ...s, startSec: parseFloat(validStart.toFixed(2)), endSec: parseFloat(validEnd.toFixed(2)) };
+      })
     );
   };
 
@@ -189,6 +203,7 @@ export default function V1Studio() {
         fileUrls: uploadedFiles,
         hookText: hookText.trim(),
         tone,
+        videoSpeed,
         brandKit,
       };
 
@@ -368,6 +383,13 @@ export default function V1Studio() {
             onSelect={(t) => setTone(t)}
           />
 
+          {/* Speed control */}
+          <SpeedControl
+            value={videoSpeed}
+            onChange={setVideoSpeed}
+            disabled={isGenerating}
+          />
+
           {/* Hook text */}
           <HookInput value={hookText} onChange={setHookText} maxLength={500} />
 
@@ -395,37 +417,20 @@ export default function V1Studio() {
             />
           )}
 
-          {/* Segment Review Panel */}
+          {/* Segment Review & InShot Timeline Studio */}
           {showSegmentReview && segments.length > 0 && (
-            <section className="segment-review fade-in">
-              <div className="segment-review-header">
-                <h3 className="segment-review-title">
-                  <IconScissors size={16} /> Segment Review
-                </h3>
-                <p className="segment-review-subtitle">
-                  {keptCount} kept · {fillerCount} removed · Toggle segments before finalizing
-                </p>
-              </div>
-              <div className="segment-list">
-                {segments.map((seg) => (
-                  <div key={seg.id} className={`segment-item ${seg.isKept ? "kept" : "cut"} ${seg.isFiller ? "filler" : ""}`}>
-                    <button type="button" className="segment-toggle" onClick={() => toggleSegment(seg.id)}>
-                      {seg.isKept ? <IconCheck size={14} /> : <IconX size={14} />}
-                    </button>
-                    <div className="segment-body">
-                      <div className="segment-time">
-                        {seg.startSec.toFixed(1)}s – {seg.endSec.toFixed(1)}s
-                        {seg.cutReason && <span className="segment-reason">{seg.cutReason}</span>}
-                      </div>
-                      <div className="segment-transcript">{seg.transcript}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button type="button" className="btn btn-primary" style={{ marginTop: "12px", width: "100%" }} onClick={() => { setShowSegmentReview(false); handleGenerate(segments); }}>
-                <IconScissors size={16} /> Continue with {keptCount} segments
-              </button>
-            </section>
+            <TimelineEditor
+              segments={segments}
+              videoUrls={uploadedFiles.map((f) => f.url)}
+              onUpdateSegmentTrim={updateSegmentTrim}
+              onToggleSegment={toggleSegment}
+              onContinue={() => {
+                setShowSegmentReview(false);
+                handleGenerate(segments);
+              }}
+              keptCount={keptCount}
+              fillerCount={fillerCount}
+            />
           )}
 
           {/* Edit Plan Display */}

@@ -85,24 +85,41 @@ async function runFfmpeg(args: string[]): Promise<void> {
 }
 
 /**
- * Trim a video segment.
+ * Trim a video segment with optional speed multiplier (e.g. 1.0, 1.1, 1.25, 1.5).
  * Re-encodes video & audio with audio resampling (-af aresample=async=1)
  * to guarantee frame-accurate cuts, perfect lip sync, and uniform 44.1kHz stereo audio.
- * This prevents audio dropping out on subsequent concatenated segments.
  */
 export async function trimVideo(
   videoUrl: string,
   startSec: number,
-  endSec: number
+  endSec: number,
+  speed = 1.0
 ): Promise<string> {
   const outPath = tmpFile();
-  const duration = Math.max(0.1, endSec - startSec);
+  const rawDuration = Math.max(0.1, endSec - startSec);
 
-  await runFfmpeg([
+  const args: string[] = [
     "-y",
     "-ss", startSec.toFixed(3),
     "-i", videoUrl,
-    "-t", duration.toFixed(3),
+    "-t", rawDuration.toFixed(3),
+  ];
+
+  if (speed !== 1.0 && speed > 0.5 && speed <= 2.0) {
+    const ptsRatio = (1 / speed).toFixed(4);
+    args.push(
+      "-filter_complex",
+      `[0:v]setpts=${ptsRatio}*PTS[v];[0:a]aresample=async=1,atempo=${speed.toFixed(2)}[a]`,
+      "-map", "[v]",
+      "-map", "[a]"
+    );
+  } else {
+    args.push(
+      "-af", "aresample=async=1"
+    );
+  }
+
+  args.push(
     "-c:v", "libx264",
     "-preset", "ultrafast",
     "-crf", "22",
@@ -110,11 +127,12 @@ export async function trimVideo(
     "-ar", "44100",
     "-ac", "2",
     "-b:a", "192k",
-    "-af", "aresample=async=1",
     "-avoid_negative_ts", "make_zero",
     "-movflags", "+faststart",
-    outPath,
-  ]);
+    outPath
+  );
+
+  await runFfmpeg(args);
   return outPath;
 }
 
