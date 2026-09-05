@@ -1,0 +1,12 @@
+agent/
+agent_temp/
+.claude/
+waitlist.json
+venv/
+.env.local
+.git/
+node_modules/
+.next/
+*.mp4
+*.wav
+*.ass

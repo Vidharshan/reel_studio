@@ -23,10 +23,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size (max 20MB for video)
-    if (file.size > 20 * 1024 * 1024) {
+    // Validate file size (max 50MB for video)
+    if (file.size > 50 * 1024 * 1024) {
       return NextResponse.json(
-        { error: "File too large. Maximum 20MB for videos." },
+        { error: "File too large. Maximum 50MB for videos." },
         { status: 400 }
       );
     }

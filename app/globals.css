@@ -1964,3 +1964,214 @@ audio::-webkit-media-controls-panel {
     font-size: 2.25rem;
   }
 }
+
+/* ========================================
+   v1 — Segment Review Panel
+   ======================================== */
+.segment-review {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 20px;
+}
+
+.segment-review-header {
+  margin-bottom: 16px;
+}
+
+.segment-review-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.segment-review-subtitle {
+  font-size: 0.74rem;
+  color: var(--text-2);
+}
+
+.segment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: 4px;
+}
+
+.segment-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+
+.segment-item.kept {
+  border-color: rgba(52, 211, 153, 0.25);
+  background: rgba(52, 211, 153, 0.04);
+}
+
+.segment-item.cut {
+  opacity: 0.55;
+  border-color: rgba(251, 113, 133, 0.2);
+  background: rgba(251, 113, 133, 0.03);
+}
+
+.segment-item.filler .segment-transcript {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+
+.segment-toggle {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg-inset);
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+  margin-top: 2px;
+}
+
+.segment-item.kept .segment-toggle {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: white;
+}
+
+.segment-item.cut .segment-toggle {
+  background: var(--err-dim);
+  border-color: rgba(251, 113, 133, 0.3);
+  color: var(--err);
+}
+
+.segment-toggle:hover {
+  transform: scale(1.1);
+}
+
+.segment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.segment-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.68rem;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  margin-bottom: 3px;
+}
+
+.segment-reason {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  font-size: 0.6rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.segment-transcript {
+  font-size: 0.82rem;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+/* ========================================
+   v1 — Edit Plan Card
+   ======================================== */
+.edit-plan-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 20px;
+}
+
+.edit-plan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.edit-plan-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.edit-plan-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.edit-plan-seg {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-xs);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+}
+
+.edit-plan-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--brand-dim);
+  color: var(--brand-1);
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-plan-text {
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.broll-list {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.broll-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: var(--r-xs);
+  background: var(--info-dim);
+  border: 1px solid rgba(34, 211, 238, 0.15);
+  font-size: 0.76rem;
+  color: var(--info);
+  margin-bottom: 4px;
+}

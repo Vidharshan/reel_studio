@@ -214,8 +214,8 @@ export default function ReelStudio() {
         alert(`Invalid type for ${file.name}. Only MP4, MOV, WebM, or GIF are allowed.`);
         return;
       }
-      if (file.size > 20 * 1024 * 1024) {
-        alert(`${file.name} is too large. Max 20MB.`);
+      if (file.size > 50 * 1024 * 1024) {
+        alert(`${file.name} is too large. Max 50MB.`);
         return;
       }
     }
@@ -685,7 +685,7 @@ export default function ReelStudio() {
             <>
               <UploadZone
                 label={`Raw clips (${videoFiles.length}/5)`}
-                hint="MP4, MOV, WebM, GIF · Max 20MB each"
+                hint="MP4, MOV, WebM, GIF · Max 50MB each"
                 accept="video/mp4,video/quicktime,video/webm,video/x-m4v,image/gif"
                 multiple
                 isUploading={isUploadingVideo}
