@@ -1,0 +1,17 @@
+
+> reel_studio@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.12 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.2.0.2:3000
+- Environments: .env.local
+✓ Ready in 6.6s
+Creating turbopack project { dir: 'D:\\2026\\reel_studio', testMode: true }
+
+ GET / 200 in 696ms (next.js: 492ms, application-code: 204ms)
+ GET / 200 in 71ms (next.js: 7ms, application-code: 65ms)
+ POST /api/waitlist 200 in 234ms (next.js: 202ms, application-code: 33ms)
+ GET / 200 in 54ms (next.js: 4ms, application-code: 50ms)
+ POST /api/waitlist 200 in 16ms (next.js: 6ms, application-code: 10ms)
+ POST /api/waitlist 400 in 9ms (next.js: 4ms, application-code: 5ms)

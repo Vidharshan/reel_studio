@@ -210,7 +210,7 @@ export async function overlayBrolls(
         "-i", overlay.brollUrl,
         "-filter_complex",
         `[1:v]scale=540:360:force_original_aspect_ratio=decrease,pad=540:360:(ow-iw)/2:(oh-ih)/2:color=black[broll];` +
-        `[0:v][broll]overlay=x=(main_w-540)/2:y=240:enable='between(t,${overlay.startSec.toFixed(3)},${endSec.toFixed(3)})'[vout]`,
+        `[0:v][broll]overlay=x=(main_w-540)/2:y=main_h-450:enable='between(t,${overlay.startSec.toFixed(3)},${endSec.toFixed(3)})'[vout]`,
         "-map", "[vout]",
         "-map", "0:a", // Preserve main speaker voice audio 100%!
         "-c:v", "libx264",

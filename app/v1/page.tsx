@@ -86,6 +86,109 @@ export default function V1Studio() {
   /* -- Brand Kit -- */
   const [brandKit, setBrandKit] = useState<BrandKit>(DEFAULT_BRAND_KIT);
 
+  /* -- Draft Persistence state -- */
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+  const [restoredNotice, setRestoredNotice] = useState<string | null>(null);
+  const [savedDrafts, setSavedDrafts] = useState<{ id: string; name: string; updatedAt: string; data: Record<string, unknown> }[]>([]);
+
+  // Load saved drafts on mount
+  useEffect(() => {
+    try {
+      const savedList = localStorage.getItem("reeltrix_v1_saved_projects");
+      if (savedList) setSavedDrafts(JSON.parse(savedList));
+
+      const activeDraft = localStorage.getItem("reeltrix_v1_active_draft");
+      if (activeDraft) {
+        const parsed = JSON.parse(activeDraft);
+        if (parsed.uploadedFiles?.length > 0 || parsed.segments?.length > 0) {
+          setRestoredNotice(`Found auto-saved draft from ${new Date(parsed.updatedAt || Date.now()).toLocaleTimeString()}`);
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Auto-save active state to localStorage whenever changed
+  useEffect(() => {
+    if (uploadedFiles.length === 0 && segments.length === 0 && !hookText) return;
+
+    try {
+      const draftData = {
+        updatedAt: new Date().toISOString(),
+        uploadedFiles,
+        hookText,
+        tone,
+        videoSpeed,
+        segments,
+        showSegmentReview,
+        editPlan,
+        brollPlacements,
+        finalResult,
+      };
+      localStorage.setItem("reeltrix_v1_active_draft", JSON.stringify(draftData));
+    } catch { /* ignore quota errors */ }
+  }, [uploadedFiles, hookText, tone, videoSpeed, segments, showSegmentReview, editPlan, brollPlacements, finalResult]);
+
+  const loadDraftData = (data: Record<string, unknown>) => {
+    if (data.uploadedFiles) setUploadedFiles(data.uploadedFiles as UploadedFile[]);
+    if (data.hookText) setHookText(data.hookText as string);
+    if (data.tone) setTone(data.tone as string);
+    if (data.videoSpeed) setVideoSpeed(data.videoSpeed as number);
+    if (data.segments) setSegments(data.segments as Segment[]);
+    if (typeof data.showSegmentReview === "boolean") setShowSegmentReview(data.showSegmentReview);
+    if (data.editPlan) setEditPlan(data.editPlan as EditPlan);
+    if (data.brollPlacements) setBrollPlacements(data.brollPlacements as BrollPlacement[]);
+    if (data.finalResult) setFinalResult(data.finalResult as Record<string, unknown>);
+    setHasRestoredDraft(true);
+    setRestoredNotice(null);
+  };
+
+  const handleResumeDraft = () => {
+    try {
+      const activeDraft = localStorage.getItem("reeltrix_v1_active_draft");
+      if (activeDraft) loadDraftData(JSON.parse(activeDraft));
+    } catch { /* ignore */ }
+  };
+
+  const handleClearDraft = () => {
+    localStorage.removeItem("reeltrix_v1_active_draft");
+    setUploadedFiles([]);
+    setSegments([]);
+    setShowSegmentReview(false);
+    setEditPlan(null);
+    setBrollPlacements([]);
+    setFinalResult(null);
+    setHookText("");
+    setRestoredNotice(null);
+    setHasRestoredDraft(false);
+  };
+
+  const handleSaveNamedProject = () => {
+    const projName = prompt("Enter a name for this project draft:", `Reel Project ${new Date().toLocaleDateString()}`);
+    if (!projName) return;
+
+    const newProj = {
+      id: `proj_${Date.now()}`,
+      name: projName,
+      updatedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      data: {
+        uploadedFiles,
+        hookText,
+        tone,
+        videoSpeed,
+        segments,
+        showSegmentReview,
+        editPlan,
+        brollPlacements,
+        finalResult,
+      },
+    };
+
+    const updatedList = [newProj, ...savedDrafts.slice(0, 9)];
+    setSavedDrafts(updatedList);
+    localStorage.setItem("reeltrix_v1_saved_projects", JSON.stringify(updatedList));
+    alert(`Project "${projName}" saved to drafts!`);
+  };
+
   /* -- Timer -- */
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
@@ -110,10 +213,6 @@ export default function V1Studio() {
   const handleFilesSelect = useCallback(async (files: FileList | null) => {
     if (!files) return;
     const newFiles = Array.from(files);
-    if (uploadedFiles.length + newFiles.length > 10) {
-      alert("Maximum 10 files allowed.");
-      return;
-    }
 
     setIsUploading(true);
     try {
@@ -327,6 +426,69 @@ export default function V1Studio() {
   return (
     <div className="app">
       <BrandBar />
+
+      {/* Auto-Save & Restoration Banner */}
+      {restoredNotice && (
+        <div style={{ backgroundColor: "#1E1B4B", borderBottom: "1px solid #4338CA", padding: "10px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: "13px", color: "#C7D2FE", fontWeight: 500 }}>
+            💾 <strong>Auto-Saved Draft Detected:</strong> {restoredNotice}
+          </span>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button type="button" onClick={handleResumeDraft} className="btn btn-primary" style={{ padding: "4px 14px", fontSize: "12px" }}>
+              Resume Draft ➔
+            </button>
+            <button type="button" onClick={handleClearDraft} style={{ background: "none", border: "1px solid #6366F1", color: "#A5B4FC", padding: "4px 12px", borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}>
+              Start Fresh
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Saved Projects Toolbar */}
+      <div style={{ backgroundColor: "#0D0D10", borderBottom: "1px solid #1F1F23", padding: "8px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "12px", color: "#A1A1AA", fontWeight: 600 }}>PROJECT DRAFTS:</span>
+          {savedDrafts.length > 0 ? (
+            <select
+              onChange={(e) => {
+                const proj = savedDrafts.find((p) => p.id === e.target.value);
+                if (proj) loadDraftData(proj.data);
+              }}
+              style={{ backgroundColor: "#18181B", border: "1px solid #27272A", color: "#FAFAFA", borderRadius: "6px", padding: "4px 10px", fontSize: "12px", outline: "none" }}
+            >
+              <option value="">-- Load Saved Project ({savedDrafts.length}) --</option>
+              {savedDrafts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.updatedAt})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span style={{ fontSize: "12px", color: "#71717A" }}>No saved projects yet</span>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            type="button"
+            onClick={handleSaveNamedProject}
+            disabled={uploadedFiles.length === 0}
+            style={{ backgroundColor: "#18181B", border: "1px solid #27272A", color: "#00E676", padding: "4px 12px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", fontWeight: 600 }}
+          >
+            💾 Save Current Draft
+          </button>
+          {(uploadedFiles.length > 0 || segments.length > 0) && (
+            <button
+              type="button"
+              onClick={handleClearDraft}
+              style={{ backgroundColor: "transparent", border: "none", color: "#F87171", padding: "4px 8px", fontSize: "12px", cursor: "pointer" }}
+            >
+              Clear &amp; Reset
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="app-shell">
         {/* ── Config rail ── */}
         <aside className="rail">
@@ -351,7 +513,7 @@ export default function V1Studio() {
                 <>
                   <span className="upload-icon"><IconPlus size={26} /></span>
                   <p className="upload-text"><strong>Drop videos or photos</strong>&nbsp;or click to browse</p>
-                  <p className="upload-hint">MP4, MOV, WebM, JPEG, PNG · Max 50MB each · Up to 10 files</p>
+                  <p className="upload-hint">MP4, MOV, WebM, JPEG, PNG · No size limit · Unlimited uploads</p>
                 </>
               )}
               <input ref={fileInputRef} type="file" multiple accept="video/mp4,video/quicktime,video/webm,video/x-m4v,image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }} onChange={(e) => { handleFilesSelect(e.target.files); e.target.value = ""; }} />
@@ -422,6 +584,7 @@ export default function V1Studio() {
             <TimelineEditor
               segments={segments}
               videoUrls={uploadedFiles.map((f) => f.url)}
+              brollPlacements={brollPlacements}
               onUpdateSegmentTrim={updateSegmentTrim}
               onToggleSegment={toggleSegment}
               onContinue={() => {

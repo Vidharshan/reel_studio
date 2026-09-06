@@ -23,14 +23,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size (max 50MB for video)
-    if (file.size > 50 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: "File too large. Maximum 50MB for videos." },
-        { status: 400 }
-      );
-    }
-
     // Upload to fal storage
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const blob = new Blob([fileBuffer], { type: file.type });

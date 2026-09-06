@@ -670,7 +670,7 @@ export default function ReelStudio() {
           {mode === "single" ? (
             <UploadZone
               label="Your photo"
-              hint="JPEG, PNG, WebP, GIF · Max 10MB"
+              hint="JPEG, PNG, WebP, GIF · No size limit"
               accept="image/jpeg,image/png,image/webp,image/gif"
               preview={imagePreview}
               isUploading={isUploading}
@@ -684,8 +684,8 @@ export default function ReelStudio() {
           ) : (
             <>
               <UploadZone
-                label={`Raw clips (${videoFiles.length}/5)`}
-                hint="MP4, MOV, WebM, GIF · Max 50MB each"
+                label={`Raw clips (${videoFiles.length})`}
+                hint="MP4, MOV, WebM, GIF · No size limit · Unlimited uploads"
                 accept="video/mp4,video/quicktime,video/webm,video/x-m4v,image/gif"
                 multiple
                 isUploading={isUploadingVideo}

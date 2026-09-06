@@ -2,11 +2,16 @@
 
 import { useState, useEffect } from "react";
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type FormStatus = "idle" | "submitting" | "success" | "invalid" | "error";
+
 export default function WaitlistPage() {
   const [email, setEmail] = useState("");
   const [emailSecondary, setEmailSecondary] = useState("");
-  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
-  const [statusSecondary, setStatusSecondary] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [status, setStatus] = useState<FormStatus>("idle");
+  const [statusSecondary, setStatusSecondary] = useState<FormStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessageSecondary, setErrorMessageSecondary] = useState("");
   const [waitlistCount, setWaitlistCount] = useState(148);
 
   // Mockup Simulation States
@@ -46,19 +51,22 @@ export default function WaitlistPage() {
       clearInterval(textInterval);
       clearInterval(consoleInterval);
     };
-  }, []);
+  }, [consoleLines.length, mockupWords.length]);
 
   const handleWaitlistSubmit = async (e: React.FormEvent, isSecondary = false) => {
     e.preventDefault();
-    const targetEmail = isSecondary ? emailSecondary : email;
+    const targetEmail = (isSecondary ? emailSecondary : email).trim();
     const setTargetStatus = isSecondary ? setStatusSecondary : setStatus;
+    const setTargetErrorMessage = isSecondary ? setErrorMessageSecondary : setErrorMessage;
 
-    if (!targetEmail || !targetEmail.includes("@")) {
-      setTargetStatus("error");
+    if (!EMAIL_PATTERN.test(targetEmail)) {
+      setTargetStatus("invalid");
+      setTargetErrorMessage("Please enter a valid email address.");
       return;
     }
 
     setTargetStatus("submitting");
+    setTargetErrorMessage("");
 
     try {
       const res = await fetch("/api/waitlist", {
@@ -67,8 +75,8 @@ export default function WaitlistPage() {
         body: JSON.stringify({ email: targetEmail })
       });
 
+      const data = await res.json();
       if (res.ok) {
-        const data = await res.json();
         setTargetStatus("success");
         if (data.count) {
           setWaitlistCount(data.count + 148); // add our baseline waitlist count
@@ -77,9 +85,11 @@ export default function WaitlistPage() {
         else setEmail("");
       } else {
         setTargetStatus("error");
+        setTargetErrorMessage(data.error || "We couldn't add you to the waitlist. Please try again.");
       }
     } catch {
       setTargetStatus("error");
+      setTargetErrorMessage("We couldn't reach the waitlist service. Please try again.");
     }
   };
 
@@ -121,7 +131,7 @@ export default function WaitlistPage() {
                   fontSize: "0.95rem",
                   fontWeight: 500
                 }}>
-                  ✓ You've been added to the priority waitlist!
+                  ✓ You&apos;ve been added to the priority waitlist!
                 </div>
               ) : (
                 <form onSubmit={(e) => handleWaitlistSubmit(e, false)} className="waitlist-form">
@@ -140,9 +150,9 @@ export default function WaitlistPage() {
                   </button>
                 </form>
               )}
-              {status === "error" && (
+              {(status === "invalid" || status === "error") && (
                 <p style={{ color: "#F87171", fontSize: "0.82rem", marginTop: "-4px" }}>
-                  Please enter a valid email address.
+                  {errorMessage}
                 </p>
               )}
               <div className="waitlist-trust-line">
@@ -293,7 +303,7 @@ export default function WaitlistPage() {
                 fontSize: "0.95rem",
                 fontWeight: 500
               }}>
-                ✓ You've been added to the priority waitlist!
+                ✓ You&apos;ve been added to the priority waitlist!
               </div>
             ) : (
               <form onSubmit={(e) => handleWaitlistSubmit(e, true)} className="waitlist-form">
@@ -312,9 +322,9 @@ export default function WaitlistPage() {
                 </button>
               </form>
             )}
-            {statusSecondary === "error" && (
+            {(statusSecondary === "invalid" || statusSecondary === "error") && (
               <p style={{ color: "#F87171", fontSize: "0.82rem", marginTop: "-4px" }}>
-                Please enter a valid email address.
+                {errorMessageSecondary}
               </p>
             )}
             <div className="waitlist-trust-line" style={{ justifyContent: "center" }}>
