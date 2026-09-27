@@ -66,9 +66,14 @@ function getFfmpegPath(): string {
 
 const resolvedFfmpegPath = getFfmpegPath();
 
+const TMP_DIR = path.join(process.cwd(), "tmp");
+if (!fs.existsSync(TMP_DIR)) {
+  try { fs.mkdirSync(TMP_DIR, { recursive: true }); } catch { /* ignore */ }
+}
+
 function tmpFile(ext = ".mp4"): string {
   return path.join(
-    os.tmpdir(),
+    TMP_DIR,
     `reeltrix_${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`
   );
 }

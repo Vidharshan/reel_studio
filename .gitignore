@@ -36,6 +36,14 @@ reelstudio/*
 # vercel
 .vercel
 
+# temp and local binary directories
+/bin/
+/uploads/
+/tmp/
+/public/broll/
+/public/sfx/
+/data/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

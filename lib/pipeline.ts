@@ -73,9 +73,9 @@ export const STEP_DEFINITIONS = [
   {
     step: 4,
     name: "Compose",
-    modelId: "fal-ai/ffmpeg-api/merge-audio-video",
+    modelId: "local/ffmpeg",
     icon: "🎞️",
-    description: "Stitching final reel",
+    description: "Stitching final reel locally (free)",
   },
 ] as const;
 
@@ -104,9 +104,9 @@ export const MULTICLIP_STEP_DEFINITIONS = [
   {
     step: 4,
     name: "Stitch & Compose",
-    modelId: "fal-ai/ffmpeg-api/compose",
+    modelId: "local/ffmpeg",
     icon: "🎞️",
-    description: "Trimming and multi-track stitching",
+    description: "Trimming and multi-track stitching locally (free)",
   },
 ] as const;
 

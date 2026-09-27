@@ -15,3 +15,4 @@ Creating turbopack project { dir: 'D:\\2026\\reel_studio', testMode: true }
  GET / 200 in 54ms (next.js: 4ms, application-code: 50ms)
  POST /api/waitlist 200 in 16ms (next.js: 6ms, application-code: 10ms)
  POST /api/waitlist 400 in 9ms (next.js: 4ms, application-code: 5ms)
+ GET /v1 200 in 1384ms (next.js: 1096ms, application-code: 287ms)

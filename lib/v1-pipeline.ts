@@ -35,6 +35,7 @@ export interface Segment {
   isKept: boolean;       // user can toggle in pre-flight
   cutReason?: string;    // "silence" | "filler_word" | "false_start" | "repeat" | null
   caption?: string;      // Florence-2 scene description
+  speed?: number;        // InShot playback speed multiplier (e.g. 1.0, 1.25, 1.5)
 }
 
 /* ---- Edit Plan (LLM-generated) ---- */

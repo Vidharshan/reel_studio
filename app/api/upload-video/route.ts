@@ -1,40 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { fal } from "@fal-ai/client";
+import { NextResponse } from "next/server";
 
-fal.config({
-  credentials: process.env.FAL_KEY!,
-});
+/**
+ * Upload-video route endpoint configuration.
+ *
+ * NOTE: Raw video file bodies are NO LONGER proxied through Vercel Serverless functions
+ * (which enforce a hard 4.5 MB request body limit).
+ * Browser clients upload directly to tusd on the VPS via tus-js-client.
+ */
+export async function GET() {
+  const endpoint = process.env.NEXT_PUBLIC_TUSD_ENDPOINT || "http://localhost:1080/files/";
+  return NextResponse.json({ uploadEndpoint: endpoint });
+}
 
-export async function POST(request: NextRequest) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
-
-    if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
-    }
-
-    // Validate file type
-    const validTypes = ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v", "image/gif"];
-    if (!validTypes.includes(file.type)) {
-      return NextResponse.json(
-        { error: "Invalid video file type. Use MP4, MOV, WebM, or GIF." },
-        { status: 400 }
-      );
-    }
-
-    // Upload to fal storage
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const blob = new Blob([fileBuffer], { type: file.type });
-    const url = await fal.storage.upload(blob);
-
-    return NextResponse.json({ url });
-  } catch (err) {
-    const error = err as Error;
-    console.error("Video upload error:", error);
-    return NextResponse.json(
-      { error: error.message || "Upload failed" },
-      { status: 500 }
-    );
-  }
+export async function POST() {
+  const endpoint = process.env.NEXT_PUBLIC_TUSD_ENDPOINT || "http://localhost:1080/files/";
+  return NextResponse.json({
+    message: "Direct file body upload is deprecated. Use tus-js-client to upload directly to tusd.",
+    uploadEndpoint: endpoint,
+  });
 }

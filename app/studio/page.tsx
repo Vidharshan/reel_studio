@@ -9,6 +9,7 @@ import {
   type ToneStyle,
   type PipelineMode,
 } from "@/lib/pipeline";
+import { uploadFileWithTus } from "@/lib/tus-upload";
 import {
   BrandBar,
   ModeToggle,
@@ -162,36 +163,30 @@ export default function ReelStudio() {
     setCachedEditPlan(null);
   }, [mode]);
 
-  /* --- File handling --- */
+  /* --- File handling via tusd --- */
   const handleFileSelect = useCallback(async (file: File) => {
     const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     if (!validTypes.includes(file.type)) {
       alert("Invalid file type. Please use JPEG, PNG, WebP, or GIF.");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      alert("File too large. Maximum 10MB.");
-      return;
-    }
 
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
 
-    // Upload to server
+    // Upload directly to tusd on VPS
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
-      if (data.url) {
-        setImageUrl(data.url);
+      const res = await uploadFileWithTus(file);
+      if (res.url) {
+        setImageUrl(res.url);
       } else {
-        alert("Upload failed: " + (data.error || "Unknown error"));
+        alert("Upload failed.");
         setImageFile(null);
         setImagePreview(null);
       }
-    } catch {
+    } catch (err) {
+      console.error("Image upload error:", err);
       alert("Upload failed. Please try again.");
       setImageFile(null);
       setImagePreview(null);
@@ -214,10 +209,6 @@ export default function ReelStudio() {
         alert(`Invalid type for ${file.name}. Only MP4, MOV, WebM, or GIF are allowed.`);
         return;
       }
-      if (file.size > 50 * 1024 * 1024) {
-        alert(`${file.name} is too large. Max 50MB.`);
-        return;
-      }
     }
 
     setIsUploadingVideo(true);
@@ -226,22 +217,20 @@ export default function ReelStudio() {
       const previews: string[] = [];
 
       for (const file of newFiles) {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await fetch("/api/upload-video", { method: "POST", body: formData });
-        const data = await res.json();
-        if (data.url) {
-          uploadedUrls.push(data.url);
+        const res = await uploadFileWithTus(file);
+        if (res.url) {
+          uploadedUrls.push(res.url);
           previews.push(URL.createObjectURL(file));
         } else {
-          alert(`Failed to upload ${file.name}: ${data.error || "Unknown error"}`);
+          alert(`Failed to upload ${file.name}`);
         }
       }
 
       setVideoFiles((prev) => [...prev, ...newFiles]);
       setVideoPreviews((prev) => [...prev, ...previews]);
       setVideoUrls((prev) => [...prev, ...uploadedUrls]);
-    } catch {
+    } catch (err) {
+      console.error("Video upload error:", err);
       alert("Failed to upload videos. Please try again.");
     } finally {
       setIsUploadingVideo(false);

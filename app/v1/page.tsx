@@ -12,6 +12,7 @@ import {
   type UploadedFile,
 } from "@/lib/v1-pipeline";
 import { TEMPLATE_CATALOG } from "@/lib/pipeline";
+import { uploadFileWithTus } from "@/lib/tus-upload";
 import {
   BrandBar,
   TemplateCatalog,
@@ -65,6 +66,7 @@ export default function V1Studio() {
   /* -- Upload state (unified) -- */
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* -- Pipeline state -- */
@@ -209,12 +211,13 @@ export default function V1Studio() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isGenerating]);
 
-  /* -- File handling (unified) -- */
+  /* -- File handling (unified via tusd) -- */
   const handleFilesSelect = useCallback(async (files: FileList | null) => {
     if (!files) return;
     const newFiles = Array.from(files);
 
     setIsUploading(true);
+    setUploadProgress(0);
     try {
       for (const file of newFiles) {
         const isVideo = file.type.startsWith("video/") || file.type === "image/gif";
@@ -225,30 +228,48 @@ export default function V1Studio() {
           continue;
         }
 
-        const endpoint = isVideo ? "/api/upload-video" : "/api/upload";
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await fetch(endpoint, { method: "POST", body: formData });
-        const data = await res.json();
+        const res = await uploadFileWithTus(file, {
+          onProgress: (_bytesUploaded, _bytesTotal, percentage) => {
+            setUploadProgress(percentage);
+          },
+        });
 
-        if (data.url) {
-          setUploadedFiles((prev) => [
-            ...prev,
-            {
-              url: data.url,
-              type: isVideo ? "video" : "image",
-              name: file.name,
-              thumbnailUrl: isImage ? URL.createObjectURL(file) : undefined,
-            },
-          ]);
-        } else {
-          alert(`Upload failed for ${file.name}: ${data.error || "Unknown error"}`);
+        if (res.url) {
+          const newFile: UploadedFile = {
+            url: res.url,
+            type: isVideo ? "video" : "image",
+            name: file.name,
+            thumbnailUrl: isImage ? URL.createObjectURL(file) : undefined,
+          };
+          setUploadedFiles((prev) => {
+            const nextFiles = [...prev, newFile];
+            if (isVideo) {
+              setSegments((prevSegs) => {
+                const vidIdx = nextFiles.filter((f) => f.type === "video").length - 1;
+                return [
+                  ...prevSegs,
+                  {
+                    id: `seg_${Date.now()}_${vidIdx}`,
+                    sourceClipIndex: Math.max(0, vidIdx),
+                    startSec: 0,
+                    endSec: 10.0,
+                    transcript: file.name.replace(/\.[^/.]+$/, ""),
+                    isFiller: false,
+                    isKept: true,
+                  },
+                ];
+              });
+            }
+            return nextFiles;
+          });
         }
       }
-    } catch {
-      alert("Upload failed. Please try again.");
+    } catch (err) {
+      console.error("Tus upload error:", err);
+      alert("Upload failed. Please check network connection and try again.");
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   }, [uploadedFiles]);
 
@@ -308,6 +329,27 @@ export default function V1Studio() {
 
       if (resumeSegments) {
         payload.existingSegments = resumeSegments;
+        const kept = resumeSegments.filter((s) => s.isKept);
+        payload.existingEditPlan = {
+          orderedSegmentIds: kept.map((s) => s.id),
+          captionBlocks: kept.map((s, i) => ({
+            segmentId: s.id,
+            text: s.transcript.split(" ").slice(0, 5).join(" ") || s.transcript,
+            startSec: i * 3,
+            endSec: i * 3 + 3,
+            highlightWords: [s.transcript.split(" ")[0] || ""],
+          })),
+          brollSuggestions: brollPlacements.map((b) => ({
+            afterSegmentId: b.afterSegmentId,
+            query: b.query,
+            durationSec: b.durationSec,
+            reason: "Timeline placement",
+          })),
+          totalDurationSec: kept.reduce(
+            (sum, s) => sum + (s.endSec - s.startSec) / (s.speed || 1.0),
+            0
+          ),
+        };
       }
 
       const response = await fetch("/api/generate-v1", {
@@ -507,7 +549,7 @@ export default function V1Studio() {
               {isUploading ? (
                 <>
                   <span className="spinner" style={{ width: 22, height: 22 }} />
-                  <p className="upload-text">Uploading&hellip;</p>
+                  <p className="upload-text">Uploading direct to VPS ({uploadProgress}%)&hellip;</p>
                 </>
               ) : (
                 <>
@@ -534,6 +576,31 @@ export default function V1Studio() {
                   </div>
                 ))}
               </div>
+            )}
+
+            {uploadedFiles.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowSegmentReview(true)}
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "8px 14px",
+                  background: "linear-gradient(135deg, rgba(139,92,246,0.2) 0%, rgba(99,102,241,0.15) 100%)",
+                  border: "1px solid #8B5CF6",
+                  color: "#C4B5FD",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                }}
+              >
+                <IconScissors size={14} /> ✂️ InShot Timeline Studio
+              </button>
             )}
           </section>
 
@@ -587,10 +654,12 @@ export default function V1Studio() {
               brollPlacements={brollPlacements}
               onUpdateSegmentTrim={updateSegmentTrim}
               onToggleSegment={toggleSegment}
+              onUpdateSegments={(newSegs) => setSegments(newSegs)}
               onContinue={() => {
                 setShowSegmentReview(false);
                 handleGenerate(segments);
               }}
+              onClose={() => setShowSegmentReview(false)}
               keptCount={keptCount}
               fillerCount={fillerCount}
             />
@@ -599,9 +668,30 @@ export default function V1Studio() {
           {/* Edit Plan Display */}
           {editPlan && !showSegmentReview && (
             <section className="edit-plan-card fade-in">
-              <div className="edit-plan-header">
-                <h3><IconScript size={16} /> Edit Plan</h3>
-                <span className="rail-note">~{editPlan.totalDurationSec.toFixed(0)}s total</span>
+              <div className="edit-plan-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <h3 style={{ margin: 0 }}><IconScript size={16} /> Edit Plan</h3>
+                  <span className="rail-note">~{editPlan.totalDurationSec.toFixed(0)}s total</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSegmentReview(true)}
+                  style={{
+                    backgroundColor: "#1C1C26",
+                    border: "1px solid #8B5CF6",
+                    color: "#C4B5FD",
+                    padding: "4px 12px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <IconScissors size={13} /> ✂️ Reopen InShot Timeline
+                </button>
               </div>
               <div className="edit-plan-segments">
                 {editPlan.orderedSegmentIds.map((id, i) => {

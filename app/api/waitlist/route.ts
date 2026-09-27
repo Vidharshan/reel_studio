@@ -24,56 +24,74 @@ function getWaitlistPathname(email: string) {
   return `waitlist/${emailHash}.json`;
 }
 
-async function saveWaitlistEntry(entry: WaitlistEntry) {
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    await put(getWaitlistPathname(entry.email), JSON.stringify(entry), {
-      access: "public",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-    });
-    return;
-  }
+function getLocalEntries(): WaitlistEntry[] {
+  try {
+    if (fs.existsSync(WAITLIST_FILE)) {
+      const fileData = fs.readFileSync(WAITLIST_FILE, "utf-8");
+      const parsed = JSON.parse(fileData);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+  } catch { /* ignore read errors */ }
+  return [];
+}
 
-  let entries: WaitlistEntry[] = [];
-  if (fs.existsSync(WAITLIST_FILE)) {
-    const fileData = fs.readFileSync(WAITLIST_FILE, "utf-8");
+async function saveWaitlistEntry(entry: WaitlistEntry): Promise<number> {
+  // 1. If Vercel Blob token is configured, write to Vercel Blob
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      entries = JSON.parse(fileData);
-      if (!Array.isArray(entries)) {
-        entries = [];
-      }
-    } catch {
-      entries = [];
+      await put(getWaitlistPathname(entry.email), JSON.stringify(entry), {
+        access: "public",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/json",
+      });
+    } catch (err) {
+      console.error("[waitlist] Blob storage error:", err);
     }
   }
 
-  const isDuplicate = entries.some((existingEntry) => existingEntry.email === entry.email);
+  // 2. Local file storage fallback
+  const entries = getLocalEntries();
+  const isDuplicate = entries.some((e) => e.email === entry.email);
   if (!isDuplicate) {
     entries.push(entry);
-    fs.writeFileSync(WAITLIST_FILE, JSON.stringify(entries, null, 2), "utf-8");
+    try {
+      fs.writeFileSync(WAITLIST_FILE, JSON.stringify(entries, null, 2), "utf-8");
+    } catch {
+      // Ignore read-only filesystem errors on Vercel deployment without Blob token
+      console.warn("[waitlist] File system read-only or unwritable (Vercel deployment mode).");
+    }
   }
+
+  return entries.length;
+}
+
+export async function GET() {
+  const entries = getLocalEntries();
+  return NextResponse.json({ count: entries.length });
 }
 
 export async function POST(req: Request) {
   try {
-    const { email } = await req.json();
+    const body = await req.json();
+    const email = body?.email;
 
     if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) {
-      return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
+      return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
     }
 
-    const newEntry = {
+    const newEntry: WaitlistEntry = {
       email: email.trim().toLowerCase(),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
-    await saveWaitlistEntry(newEntry);
+    const count = await saveWaitlistEntry(newEntry);
 
-    return NextResponse.json({ success: true });
-  } catch {
+    return NextResponse.json({ success: true, count });
+  } catch (err) {
+    console.error("[waitlist] Error:", err);
     return NextResponse.json(
-      { error: "The waitlist service is temporarily unavailable. Please try again shortly." },
+      { error: "Unable to join waitlist. Please try again." },
       { status: 500 }
     );
   }

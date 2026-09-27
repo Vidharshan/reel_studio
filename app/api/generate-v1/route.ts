@@ -18,6 +18,14 @@ import {
   type CaptionEntry,
   type BrollOverlay,
 } from "@/lib/ffmpeg-local";
+import {
+  classifyFootage,
+  filterTemplateCompatibility,
+  selectBrollCandidate,
+  confirmTrendingAudioMatch,
+  scoreFillerSegment,
+  rankTemplateSuggestions,
+} from "@/lib/jev-decision";
 
 fal.config({ credentials: process.env.FAL_KEY! });
 
@@ -84,6 +92,10 @@ export async function POST(request: NextRequest) {
       const encoder = new TextEncoder();
 
       try {
+        // Jev Decision 1: Classify uploaded footage
+        const classified = await classifyFootage(fileUrls);
+        console.log(`[reeltrix] Jev Footage Classification: ${classified.choice} (confidence: ${classified.confidence})`);
+
         // ============================================================
         // STEP 1: Transcribe & Detect Filler
         // ============================================================
@@ -241,8 +253,24 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Detect silence-only segments (no words for long stretches)
-          // and mark repeated takes
+          // Jev Decision 5: Score filler segments using Jev
+          for (const seg of segments) {
+            if (seg.isFiller) continue;
+            const duration = seg.endSec - seg.startSec;
+            const jevScore = await scoreFillerSegment({
+              id: seg.id,
+              transcript: seg.transcript,
+              durationSec: duration,
+              silenceRatio: 0.1,
+            });
+            if (jevScore.shouldCut || jevScore.cutScore > 0.7) {
+              seg.isFiller = true;
+              seg.isKept = false;
+              seg.cutReason = "filler_word";
+            }
+          }
+
+          // Detect silence-only segments & repeated takes
           const seen = new Map<string, string>();
           for (const seg of segments) {
             const normalized = seg.transcript
@@ -471,24 +499,31 @@ Return STRICTLY a raw JSON object, no markdown, no backticks:
                 continue;
               }
 
-              const searchUrl = `https://api.pexels.com/videos/search?query=${encodeURIComponent(suggestion.query)}&per_page=1&orientation=portrait`;
+              const searchUrl = `https://api.pexels.com/videos/search?query=${encodeURIComponent(suggestion.query)}&per_page=3&orientation=portrait`;
               const pexelsRes = await fetch(searchUrl, {
                 headers: { Authorization: pexelsKey },
               });
 
               if (pexelsRes.ok) {
                 const pexelsData = await pexelsRes.json();
-                const video = pexelsData.videos?.[0];
-                if (video) {
-                  // Find a suitable video file (prefer smaller for speed)
-                  const videoFile =
-                    video.video_files?.find(
-                      (vf: { width: number }) => vf.width && vf.width <= 1080
-                    ) || video.video_files?.[0];
-                  if (videoFile?.link) {
+                const videos = pexelsData.videos || [];
+                if (videos.length > 0) {
+                  // Format candidates for Jev decision model
+                  const candidates = videos.map((v: { id: number; url: string; video_files: { width: number; link: string }[] }, idx: number) => ({
+                    id: String(v.id || idx),
+                    query: suggestion.query,
+                    caption: `Vertical stock video clip ${idx + 1} for ${suggestion.query}`,
+                    link: (v.video_files?.find((vf) => vf.width && vf.width <= 1080) || v.video_files?.[0])?.link,
+                  })).filter((c: { link?: string }) => c.link);
+
+                  // Jev Decision 3: Pick the best B-roll candidate
+                  const jevChoice = await selectBrollCandidate(suggestion.reason || suggestion.query, candidates);
+                  const chosen = candidates.find((c: { id: string }) => c.id === jevChoice.selectedId) || candidates[0];
+
+                  if (chosen?.link) {
                     brollPlacements.push({
                       afterSegmentId: suggestion.afterSegmentId,
-                      url: videoFile.link,
+                      url: chosen.link,
                       query: suggestion.query,
                       durationSec: suggestion.durationSec,
                     });
@@ -561,7 +596,8 @@ Return STRICTLY a raw JSON object, no markdown, no backticks:
           if (!clipUrl) continue;
 
           const rawDuration = seg.endSec - seg.startSec;
-          const effectiveDuration = rawDuration / videoSpeed;
+          const effectiveSpeed = seg.speed || videoSpeed || 1.0;
+          const effectiveDuration = rawDuration / effectiveSpeed;
 
           sendEvent(controller, encoder, "step", {
             step: 4,
@@ -569,11 +605,11 @@ Return STRICTLY a raw JSON object, no markdown, no backticks:
             modelId: "local/ffmpeg",
             status: "running",
             startedAt: step4Start,
-            inputSummary: `Trimming segment ${i + 1}/${segsToRender.length}: ${seg.startSec.toFixed(1)}s–${seg.endSec.toFixed(1)}s (${videoSpeed}x speed)`,
+            inputSummary: `Trimming segment ${i + 1}/${segsToRender.length}: ${seg.startSec.toFixed(1)}s–${seg.endSec.toFixed(1)}s (${effectiveSpeed}x speed)`,
           });
 
           try {
-            const trimmedPath = await trimVideo(clipUrl, seg.startSec, seg.endSec, videoSpeed);
+            const trimmedPath = await trimVideo(clipUrl, seg.startSec, seg.endSec, effectiveSpeed);
             trimmedFilePaths.push(trimmedPath);
 
             // If a B-roll is placed after this segment, queue it as a PiP overlay!

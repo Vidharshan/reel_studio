@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { fal } from "@fal-ai/client";
 import { TONE_OPTIONS, type ToneStyle } from "@/lib/pipeline";
+import { mergeAudioWithVideo, cleanup, fileToBlob } from "@/lib/ffmpeg-local";
 
 // Configure fal with server-side credentials
 fal.config({
@@ -298,54 +299,39 @@ export async function POST(request: NextRequest) {
         }
 
         // ==============================
-        // Step 4: Composition
+        // Step 4: Composition (Local FFmpeg — zero API cost)
         // ==============================
         const step4Start = Date.now();
         sendEvent(controller, encoder, "step", {
           step: 4,
           name: "Compose",
-          modelId: "fal-ai/ffmpeg-api/merge-audio-video",
+          modelId: "local/ffmpeg",
           status: "running",
           startedAt: step4Start,
-          inputSummary: `Merging ${[videoOk && "video", ttsOk && "voiceover", musicOk && "music"].filter(Boolean).join(" + ")}`,
+          inputSummary: `Merging ${[videoOk && "video", ttsOk && "voiceover", musicOk && "music"].filter(Boolean).join(" + ")} locally via FFmpeg...`,
         });
 
         try {
-          // Build audio inputs for merge
-          const audioUrls: string[] = [];
-          if (voiceoverUrl) audioUrls.push(voiceoverUrl);
-          if (musicUrl) audioUrls.push(musicUrl);
+          let finalUrl = videoUrl;
+          const targetAudio = voiceoverUrl || musicUrl;
 
-          let finalUrl = videoUrl; // Default to just video if no audio
-
-          if (audioUrls.length > 0) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const composeResult = await (fal.subscribe as any)(
-              "fal-ai/ffmpeg-api/merge-audio-video",
-              {
-                input: {
-                  video_url: videoUrl,
-                  audio_url: voiceoverUrl || musicUrl,
-                },
-                logs: true,
-              }
-            );
-
-            finalUrl =
-              (composeResult as { data: Record<string, Record<string, string>> })?.data?.video?.url ||
-              videoUrl;
+          if (targetAudio) {
+            const mergedPath = await mergeAudioWithVideo(videoUrl, targetAudio);
+            const blob = fileToBlob(mergedPath);
+            finalUrl = await fal.storage.upload(blob);
+            cleanup(mergedPath);
           }
 
           const step4Duration = Date.now() - step4Start;
           sendEvent(controller, encoder, "step", {
             step: 4,
             name: "Compose",
-            modelId: "fal-ai/ffmpeg-api/merge-audio-video",
+            modelId: "local/ffmpeg",
             status: "completed",
             startedAt: step4Start,
             completedAt: Date.now(),
             durationMs: step4Duration,
-            costUsd: 0.01,
+            costUsd: 0.00,
             resultUrl: finalUrl,
           });
 
@@ -366,7 +352,7 @@ export async function POST(request: NextRequest) {
           sendEvent(controller, encoder, "step", {
             step: 4,
             name: "Compose",
-            modelId: "fal-ai/ffmpeg-api/merge-audio-video",
+            modelId: "local/ffmpeg",
             status: "failed",
             startedAt: step4Start,
             completedAt: Date.now(),

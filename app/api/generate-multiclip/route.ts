@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { fal } from "@fal-ai/client";
 import { TONE_OPTIONS, type ToneStyle } from "@/lib/pipeline";
+import { trimVideo, mergeVideos, mergeAudioWithVideo, fileToBlob, cleanup } from "@/lib/ffmpeg-local";
 
 // Configure fal with server-side credentials
 fal.config({
@@ -408,16 +409,16 @@ Do not output any other text or wrapper. Return raw JSON.`;
         });
 
         // ==============================
-        // Step 4: Stitch & Compose
+        // Step 4: Stitch & Compose (Local FFmpeg — zero API cost)
         // ==============================
         const step4Start = Date.now();
         sendEvent(controller, encoder, "step", {
           step: 4,
           name: "Stitch & Compose",
-          modelId: "fal-ai/ffmpeg-api/compose",
+          modelId: "local/ffmpeg",
           status: "running",
           startedAt: step4Start,
-          inputSummary: "Combining video slots, voiceover track and music track...",
+          inputSummary: "Combining video slots and audio tracks locally via FFmpeg...",
         });
 
         // Get the chosen clip URLs
@@ -426,92 +427,45 @@ Do not output any other text or wrapper. Return raw JSON.`;
         const ctaClipUrl = processedClips[editPlan.cta.clipIndex]?.url || videoUrls[0];
 
         try {
-          // Construct composition timeline tracks according to fal-ai/ffmpeg-api/compose schema
-          // timestamp and duration must be in milliseconds inside the keyframes array objects
-          const tracks: any[] = [
-            {
-              id: "main_video",
-              type: "video",
-              keyframes: [
-                {
-                  url: hookClipUrl,
-                  timestamp: 0,
-                  duration: 3000
-                },
-                {
-                  url: bodyClipUrl,
-                  timestamp: 3000,
-                  duration: 4000
-                },
-                {
-                  url: ctaClipUrl,
-                  timestamp: 7000,
-                  duration: 2000
-                }
-              ]
-            }
-          ];
+          // 1. Trim clips locally
+          const trimmedHook = await trimVideo(hookClipUrl, 0, 3.0);
+          const trimmedBody = await trimVideo(bodyClipUrl, 0, 4.0);
+          const trimmedCta = await trimVideo(ctaClipUrl, 0, 2.0);
 
-          // Add voiceover track if succeeded
+          // 2. Merge clips into main sequence
+          const rawSequence = await mergeVideos([trimmedHook, trimmedBody, trimmedCta]);
+
+          // 3. Mix voiceover and music audio tracks
+          let finalPath = rawSequence;
           if (voiceoverUrl) {
-            tracks.push({
-              id: "voiceover_audio",
-              type: "audio",
-              keyframes: [
-                {
-                  url: voiceoverUrl,
-                  timestamp: 0,
-                  duration: 9000
-                }
-              ]
-            });
+            const withVo = await mergeAudioWithVideo(finalPath, voiceoverUrl, 1.0);
+            if (finalPath !== rawSequence) cleanup(finalPath);
+            finalPath = withVo;
           }
-
-          // Add music track if succeeded
           if (musicUrl) {
-            tracks.push({
-              id: "music_audio",
-              type: "audio",
-              keyframes: [
-                {
-                  url: musicUrl,
-                  timestamp: 0,
-                  duration: 9000
-                }
-              ]
-            });
+            const withMusic = await mergeAudioWithVideo(finalPath, musicUrl, 0.15);
+            if (finalPath !== rawSequence) cleanup(finalPath);
+            finalPath = withMusic;
           }
 
-          const composeResult = await (fal.subscribe as any)("fal-ai/ffmpeg-api/compose", {
-            input: {
-              width: 720,
-              height: 1280,
-              tracks,
-            },
-            logs: true,
-          });
+          // Upload final composited video blob to fal storage
+          const blob = fileToBlob(finalPath);
+          const finalUrl = await fal.storage.upload(blob);
 
-          const finalUrl =
-            composeResult.data?.video_url ||
-            composeResult.data?.video?.url ||
-            composeResult.data?.url;
-
-          if (!finalUrl) {
-            throw new Error("FFmpeg composition did not return a valid video URL");
-          }
+          cleanup(trimmedHook, trimmedBody, trimmedCta, rawSequence, finalPath);
 
           const step4Duration = Date.now() - step4Start;
           sendEvent(controller, encoder, "step", {
             step: 4,
             name: "Stitch & Compose",
-            modelId: "fal-ai/ffmpeg-api/compose",
+            modelId: "local/ffmpeg",
             status: "completed",
             startedAt: step4Start,
             completedAt: Date.now(),
             durationMs: step4Duration,
-            costUsd: 0.02,
+            costUsd: 0.00,
             resultUrl: finalUrl,
-            inputSummary: `Stitched ${tracks.filter(t => t.type === "video").length} videos + ${tracks.filter(t => t.type === "audio").length} audio tracks`,
+            inputSummary: `Stitched 3 video clips + audio tracks locally via FFmpeg`,
           });
 
           const pipelineResult = {

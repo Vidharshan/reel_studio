@@ -1404,564 +1404,528 @@ audio::-webkit-media-controls-panel {
 }
 
 /* ========================================
-   Waitlist Landing Page Styles (Reeltrix)
+   Modern Landing Page Styles (Reeltrix)
    ======================================== */
-.waitlist-wrapper {
-  background-color: #070708;
-  color: #FAFAFA;
+.landing-shell {
+  background-color: #09090b;
+  color: #f8fafc;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
   font-family: var(--font-sans);
   overflow-x: hidden;
 }
 
-.waitlist-nav {
+.landing-nav {
   width: 100%;
-  max-width: 1200px;
-  height: 72px;
+  max-width: 1240px;
+  margin: 0 auto;
+  height: 68px;
   padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #27272A;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.waitlist-logo {
+.landing-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.25rem;
-  color: #FAFAFA;
 }
 
-.waitlist-logo-mark {
+.landing-logo-mark {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #00E676 0%, #00C853 100%);
-  color: #070708;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-display);
   font-weight: 800;
-  font-size: 1.1rem;
-  box-shadow: 0 0 16px rgba(0, 230, 118, 0.2);
+  font-size: 0.95rem;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
 }
 
-.waitlist-main {
-  width: 100%;
-  max-width: 1200px;
-  padding: 64px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 96px;
-  flex: 1;
+.landing-logo-text {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
 }
 
-.waitlist-hero {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 64px;
-  align-items: center;
-}
-
-.waitlist-hero-content {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 24px;
-}
-
-.waitlist-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background-color: #00E6761A;
-  border: 1px solid rgba(0, 230, 118, 0.2);
+.landing-version-pill {
+  padding: 2px 8px;
   border-radius: 99px;
-  color: #00E676;
-  font-size: 0.78rem;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #a5b4fc;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
-.waitlist-badge-dot {
+.landing-nav-studio-btn {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s var(--ease);
+}
+
+.landing-nav-studio-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Main Hero Container — Viewport-fitted */
+.landing-hero-container {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 48px 24px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.landing-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 56px;
+  align-items: center;
+  width: 100%;
+}
+
+.landing-hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.landing-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 99px;
+  color: #34d399;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.kicker-dot {
   width: 6px;
   height: 6px;
-  background-color: #00E676;
+  background: #34d399;
   border-radius: 50%;
-  animation: pulse-dot 2s infinite;
 }
 
-.waitlist-headline {
+.landing-headline {
   font-family: var(--font-display);
-  font-size: 3.5rem;
+  font-size: 3.25rem;
   font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  color: #FAFAFA;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  color: #f8fafc;
 }
 
-.waitlist-subheadline {
-  font-size: 1.125rem;
+.landing-headline span {
+  background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.landing-subheadline {
+  font-size: 1.05rem;
   line-height: 1.6;
-  color: #A1A1AA;
+  color: #94a3b8;
   max-width: 520px;
 }
 
-.waitlist-form-block {
+/* Form block */
+.landing-form-box {
   width: 100%;
   max-width: 480px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-top: 4px;
 }
 
-.waitlist-form {
+.landing-form {
   display: flex;
-  width: 100%;
   gap: 10px;
-}
-
-.waitlist-input-wrapper {
-  flex: 1;
-  position: relative;
-}
-
-.waitlist-input {
   width: 100%;
-  height: 48px;
-  background-color: #111113;
-  border: 1px solid #27272A;
+}
+
+.landing-input {
+  flex: 1;
+  height: 46px;
+  background-color: #0f172a;
+  border: 1px solid #1e293b;
   border-radius: 8px;
   padding: 0 16px;
-  color: #FAFAFA;
+  color: #f8fafc;
   font-family: var(--font-sans);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   outline: none;
   transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
 }
 
-.waitlist-input:focus {
-  border-color: #00E676;
-  box-shadow: 0 0 0 3px rgba(0, 230, 118, 0.15);
+.landing-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
 }
 
-.waitlist-input::placeholder {
-  color: #71717A;
+.landing-input::placeholder {
+  color: #64748b;
 }
 
-.waitlist-btn {
-  height: 48px;
-  padding: 0 24px;
-  background-color: #00E676;
-  color: #070708;
+.landing-submit-btn {
+  height: 46px;
+  padding: 0 20px;
+  background-color: #6366f1;
+  color: #ffffff;
   border: none;
   border-radius: 8px;
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   white-space: nowrap;
-  transition: background-color 0.2s var(--ease), transform 0.2s var(--ease);
+  transition: background-color 0.2s var(--ease), transform 0.15s var(--ease);
 }
 
-.waitlist-btn:hover:not(:disabled) {
-  background-color: #00C853;
+.landing-submit-btn:hover:not(:disabled) {
+  background-color: #4f46e5;
 }
 
-.waitlist-btn:disabled {
+.landing-submit-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.waitlist-trust-line {
-  font-size: 0.78rem;
-  color: #71717A;
+.landing-success-alert {
+  padding: 14px 16px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 8px;
+  color: #34d399;
+  font-size: 0.88rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.landing-error-text {
+  color: #f87171;
+  font-size: 0.8rem;
+}
+
+.landing-trust-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.landing-avatars {
+  display: flex;
+  align-items: center;
+}
+
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #09090b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: white;
+  margin-left: -6px;
+}
+
+.avatar:first-child { margin-left: 0; }
+.av-1 { background: #6366f1; }
+.av-2 { background: #10b981; }
+.av-3 { background: #f59e0b; }
+
+.trust-text strong {
+  color: #e2e8f0;
+}
+
+/* Feature Pills */
+.landing-feature-pills {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.pill-item {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 6px 12px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: #cbd5e1;
 }
 
-.waitlist-hero-visual {
+.pill-icon {
+  font-size: 0.85rem;
+}
+
+/* Studio Preview Card */
+.landing-hero-visual {
   display: flex;
   justify-content: center;
-  align-items: center;
 }
 
-/* Premium Visual Mockup Card */
-.waitlist-mockup-card {
+.studio-preview-card {
   width: 100%;
-  max-width: 420px;
-  background-color: #111113;
-  border: 1px solid #27272A;
+  max-width: 440px;
+  background-color: #0f172a;
+  border: 1px solid #1e293b;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
 }
 
-.waitlist-mockup-header {
+.studio-preview-bar {
   height: 40px;
-  border-bottom: 1px solid #27272A;
+  border-bottom: 1px solid #1e293b;
   padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: #09090b;
 }
 
-.waitlist-mockup-dots {
+.preview-dots {
   display: flex;
   gap: 6px;
 }
 
-.waitlist-mockup-dot {
+.dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #27272A;
 }
+.dot-r { background-color: #f87171; }
+.dot-y { background-color: #fbbf24; }
+.dot-g { background-color: #34d399; }
 
-.waitlist-mockup-dot.active {
-  background-color: #00E676;
-}
-
-.waitlist-mockup-title {
-  font-size: 0.7rem;
-  color: #71717A;
+.preview-title {
+  font-size: 0.68rem;
+  color: #64748b;
   font-family: var(--font-mono);
   letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
-.waitlist-mockup-body {
+.preview-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border-radius: 4px;
+}
+
+.studio-preview-body {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
-.waitlist-mockup-screen {
+.preview-screen {
   aspect-ratio: 16 / 9;
-  background-color: #070708;
-  border: 1px solid #27272A;
+  background-color: #020617;
+  border: 1px solid #1e293b;
   border-radius: 8px;
-  overflow: hidden;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.waitlist-mockup-video-indicator {
+.preview-rec-tag {
   position: absolute;
   top: 10px;
   left: 10px;
-  background: rgba(0,0,0,0.6);
-  padding: 4px 8px;
+  background: rgba(0,0,0,0.7);
+  padding: 3px 8px;
   border-radius: 4px;
   font-size: 0.65rem;
   font-weight: 600;
-  border: 1px solid rgba(255,255,255,0.1);
-  color: #A1A1AA;
-}
-
-.waitlist-mockup-video-indicator span {
-  color: #00E676;
-}
-
-.waitlist-mockup-captions-preview {
+  color: #94a3b8;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+}
+
+.rec-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: pulse-dot 1.5s infinite;
+}
+
+.preview-caption-box {
   text-align: center;
 }
 
-.waitlist-mockup-word-highlight {
+.preview-word-highlight {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   font-weight: 800;
-  color: #00E676;
-  text-shadow: 0 0 12px rgba(0, 230, 118, 0.3);
+  color: #818cf8;
+  letter-spacing: 0.02em;
 }
 
-.waitlist-mockup-word-sub {
-  font-size: 0.8rem;
-  color: #A1A1AA;
+.preview-word-sub {
+  font-size: 0.76rem;
+  color: #64748b;
+  margin-top: 2px;
 }
 
-.waitlist-mockup-timeline {
+.preview-timeline {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
-.waitlist-mockup-track {
-  height: 24px;
-  background-color: #070708;
-  border: 1px solid #27272A;
-  border-radius: 4px;
-  overflow: hidden;
-  position: relative;
+.timeline-meta {
   display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: #64748b;
 }
 
-.waitlist-mockup-block {
+.timeline-track-bar {
+  height: 22px;
+  background-color: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  position: relative;
+}
+
+.track-segment {
   height: 100%;
-  background: linear-gradient(90deg, #00E6761A 0%, #00E67633 100%);
-  border-right: 1px solid #00E676;
+  background: rgba(99, 102, 241, 0.25);
+  border-right: 1px solid #6366f1;
   position: absolute;
 }
 
-.waitlist-mockup-playhead {
+.timeline-playhead {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 2px;
-  background-color: #FF3D00;
+  background-color: #f43f5e;
   z-index: 2;
 }
 
-.waitlist-mockup-playhead-cap {
+.playhead-cap {
   position: absolute;
   top: -2px;
   left: -3px;
   width: 8px;
   height: 8px;
-  background-color: #FF3D00;
+  background-color: #f43f5e;
   border-radius: 50%;
 }
 
-.waitlist-mockup-label {
-  font-size: 0.65rem;
-  color: #71717A;
-  font-weight: 500;
-}
-
-.waitlist-mockup-console {
-  background-color: #070708;
-  border: 1px solid #27272A;
+.preview-console {
+  background-color: #020617;
+  border: 1px solid #1e293b;
   border-radius: 6px;
   padding: 10px;
   font-family: var(--font-mono);
   font-size: 0.68rem;
-  color: #A1A1AA;
   line-height: 1.4;
+  min-height: 80px;
 }
 
-.waitlist-mockup-console-line {
+.console-row {
   display: flex;
   gap: 8px;
+  margin-bottom: 2px;
 }
 
-.waitlist-mockup-console-prompt {
-  color: #00E676;
+.console-prompt {
+  color: #6366f1;
 }
 
-/* What it is section */
-.waitlist-intro-section {
-  text-align: center;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 24px 0;
+.console-success {
+  color: #34d399;
 }
 
-.waitlist-intro-text {
-  font-family: var(--font-display);
-  font-size: 1.6rem;
-  font-weight: 500;
-  line-height: 1.5;
-  color: #FAFAFA;
+.console-info {
+  color: #94a3b8;
 }
 
-.waitlist-intro-text span {
-  color: #00E676;
-}
-
-/* Benefits section */
-.waitlist-benefits-section {
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-}
-
-.waitlist-section-title {
-  text-align: center;
-  font-family: var(--font-display);
-  font-size: 2rem;
-  font-weight: 600;
-  color: #FAFAFA;
-}
-
-.waitlist-benefits-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-}
-
-.waitlist-benefit-card {
-  background-color: #111113;
-  border: 1px solid #27272A;
-  border-radius: 12px;
-  padding: 32px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 16px;
-  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
-}
-
-.waitlist-benefit-card:hover {
-  border-color: rgba(0, 230, 118, 0.3);
-  transform: translateY(-2px);
-}
-
-.waitlist-benefit-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background-color: #00E6761A;
-  color: #00E676;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.waitlist-benefit-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #FAFAFA;
-}
-
-.waitlist-benefit-desc {
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: #A1A1AA;
-}
-
-/* CTA Bottom Section */
-.waitlist-cta-section {
-  background-color: #111113;
-  border: 1px solid #27272A;
-  border-radius: 16px;
-  padding: 64px 32px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
-}
-
-.waitlist-cta-title {
-  font-family: var(--font-display);
-  font-size: 2.25rem;
-  font-weight: 700;
-  color: #FAFAFA;
-  letter-spacing: -0.010em;
-}
-
-.waitlist-cta-sub {
-  font-size: 1rem;
-  color: #A1A1AA;
-  max-width: 480px;
-  margin-top: -8px;
-}
-
-/* Footer */
-.waitlist-footer {
+/* Landing Footer */
+.landing-footer {
   width: 100%;
-  max-width: 1200px;
-  padding: 32px 24px;
-  border-top: 1px solid #27272A;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.82rem;
-  color: #71717A;
+  font-size: 0.8rem;
+  color: #64748b;
 }
 
-.waitlist-footer-logo {
+.landing-footer-links {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  color: #A1A1AA;
+  gap: 20px;
 }
 
-.waitlist-footer-links {
-  display: flex;
-  gap: 24px;
-}
-
-.waitlist-footer-link {
-  color: #71717A;
+.landing-footer-links a {
+  color: #94a3b8;
   text-decoration: none;
   transition: color 0.2s var(--ease);
 }
 
-.waitlist-footer-link:hover {
-  color: #A1A1AA;
+.landing-footer-links a:hover {
+  color: #f8fafc;
 }
 
-/* Responsive Waitlist Styles */
 @media (max-width: 960px) {
-  .waitlist-hero {
+  .landing-grid {
     grid-template-columns: 1fr;
-    gap: 48px;
-    text-align: center;
+    gap: 40px;
   }
-  
-  .waitlist-hero-content {
-    align-items: center;
+  .landing-headline {
+    font-size: 2.5rem;
   }
-  
-  .waitlist-subheadline {
-    margin: 0 auto;
-  }
-  
-  .waitlist-form-block {
-    margin: 0 auto;
-  }
-  
-  .waitlist-benefits-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  
-  .waitlist-headline {
-    font-size: 2.75rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .waitlist-form {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .waitlist-btn {
-    width: 100%;
-  }
-  
-  .waitlist-footer {
-    flex-direction: column;
-    gap: 16px;
-    text-align: center;
-  }
-  
-  .waitlist-headline {
-    font-size: 2.25rem;
+  .landing-hero-container {
+    padding: 32px 16px;
   }
 }
 

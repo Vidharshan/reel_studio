@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  tusd:
+    image: tusproject/tusd:latest
+    container_name: reeltrix-tusd
+    ports:
+      - "1080:1080"
+    volumes:
+      - ./uploads:/srv/tusd-data
+    command: -upload-dir=/srv/tusd-data -hooks-http-backoff=1
+    restart: always
+    environment:
+      - TUSD_UPLOAD_DIR=/srv/tusd-data

@@ -2,6 +2,7 @@ import os
 import json
 from openai import OpenAI
 from agent.config import DEEPSEEK_API_KEY, OPENROUTER_API_KEY
+from agent.jev_decision import score_filler_segment_jev, select_broll_candidate_jev
 
 def get_llm_client():
     """
