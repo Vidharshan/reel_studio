@@ -25,4 +25,4 @@ if (-not (Test-Path $tusdExe)) {
 }
 
 Write-Host "[+] Starting tusd server on http://localhost:1080/files/ ..." -ForegroundColor Green
-& $tusdExe -upload-dir (Resolve-Path $uploadsDir).Path -port 1080
+& $tusdExe -upload-dir (Resolve-Path $uploadsDir).Path -port 1080 -cors-allow-origin="*"
