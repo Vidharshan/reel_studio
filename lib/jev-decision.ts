@@ -16,20 +16,23 @@ export interface JevDecisionResponse<T> {
 
 async function callJev<T>(systemPrompt: string, userPrompt: string, parseFallback: () => T): Promise<JevDecisionResponse<T>> {
   const startTime = Date.now();
-  const modelId = "typesafe/jev-1.13";
   const openRouterKey = process.env.JEV_API_KEY || process.env.OPENROUTER_API_KEY;
 
   let url = "https://openrouter.ai/api/v1/chat/completions";
+  let targetModel = "typesafe/jev-1.13";
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "HTTP-Referer": "https://reeltrix.ai",
+    "X-Title": "Reeltrix Studio Engine",
   };
 
   if (openRouterKey) {
     headers["Authorization"] = `Bearer ${openRouterKey}`;
   } else if (process.env.FAL_KEY) {
-    // Fallback via fal OpenRouter proxy
+    // Fallback via fal OpenRouter proxy (uses fal-supported router models)
     url = "https://fal.run/openrouter/router/openai/v1/chat/completions";
     headers["Authorization"] = `Key ${process.env.FAL_KEY}`;
+    targetModel = "google/gemini-2.5-flash";
   }
 
   try {
@@ -37,7 +40,7 @@ async function callJev<T>(systemPrompt: string, userPrompt: string, parseFallbac
       method: "POST",
       headers,
       body: JSON.stringify({
-        model: modelId,
+        model: targetModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -47,8 +50,8 @@ async function callJev<T>(systemPrompt: string, userPrompt: string, parseFallbac
     });
 
     if (!res.ok) {
-      console.warn(`[Jev] OpenRouter call failed status ${res.status}, using fallback logic`);
-      return { result: parseFallback(), latencyMs: Date.now() - startTime, model: modelId };
+      console.warn(`[Jev] Decision call failed status ${res.status}, using fallback logic`);
+      return { result: parseFallback(), latencyMs: Date.now() - startTime, model: targetModel };
     }
 
     const data = await res.json();
@@ -61,11 +64,11 @@ async function callJev<T>(systemPrompt: string, userPrompt: string, parseFallbac
     return {
       result: parsed,
       latencyMs: Date.now() - startTime,
-      model: modelId,
+      model: targetModel,
     };
   } catch (err) {
     console.error("[Jev] Decision error, using fallback logic:", err);
-    return { result: parseFallback(), latencyMs: Date.now() - startTime, model: modelId };
+    return { result: parseFallback(), latencyMs: Date.now() - startTime, model: targetModel };
   }
 }
 

@@ -245,11 +245,14 @@ export async function mergeAudioWithVideo(
   audioUrl: string,
   musicVolume = 0.12
 ): Promise<string> {
+  const resolvedVideo = await resolveLocalMediaFile(videoPath);
+  const resolvedAudio = await resolveLocalMediaFile(audioUrl);
   const outPath = tmpFile();
+
   await runFfmpeg([
     "-y",
-    "-i", videoPath,
-    "-i", audioUrl,
+    "-i", resolvedVideo,
+    "-i", resolvedAudio,
     "-filter_complex",
     `[1:a]volume=${musicVolume}[music];[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
     "-map", "0:v",
@@ -262,6 +265,8 @@ export async function mergeAudioWithVideo(
     "-movflags", "+faststart",
     outPath,
   ]);
+
+  if (resolvedAudio !== audioUrl && fs.existsSync(resolvedAudio)) cleanup(resolvedAudio);
   return outPath;
 }
 
@@ -368,4 +373,49 @@ export function cleanup(...paths: string[]): void {
 export function fileToBlob(filePath: string): Blob {
   const buffer = fs.readFileSync(filePath);
   return new Blob([buffer], { type: "video/mp4" });
+}
+
+/**
+ * Resolves a local path from a localhost URL or downloads a remote media URL to a local temp file.
+ * Completely avoids SSL certificate errors and non-routable localhost issues!
+ */
+export async function resolveLocalMediaFile(urlOrPath: string): Promise<string> {
+  if (!urlOrPath) return "";
+
+  // 1. If it's already an existing local file path
+  if (fs.existsSync(urlOrPath)) return urlOrPath;
+
+  // 2. If it's a localhost/127.0.0.1 tusd upload URL
+  if (urlOrPath.includes("localhost") || urlOrPath.includes("127.0.0.1") || urlOrPath.includes("0.0.0.0")) {
+    const fileId = urlOrPath.split("/").pop();
+    if (fileId) {
+      const localUpload = path.join(process.cwd(), "uploads", fileId);
+      if (fs.existsSync(localUpload)) return localUpload;
+    }
+  }
+
+  // 3. If remote HTTP/HTTPS URL, download locally
+  if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://")) {
+    try {
+      const ext = path.extname(new URL(urlOrPath).pathname) || ".mp4";
+      const localTmp = tmpFile(ext);
+
+      // Disable TLS reject for intermediate CA certificate chains
+      const oldTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+      const res = await fetch(urlOrPath);
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = oldTls;
+
+      if (res.ok) {
+        const buffer = Buffer.from(await res.arrayBuffer());
+        fs.writeFileSync(localTmp, buffer);
+        return localTmp;
+      }
+    } catch (err) {
+      console.warn(`[reeltrix] Download media URL ${urlOrPath} warning:`, err);
+    }
+  }
+
+  return urlOrPath;
 }

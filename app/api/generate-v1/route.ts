@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { fal } from "@fal-ai/client";
+import fs from "fs";
+import path from "path";
 import { TONE_OPTIONS } from "@/lib/pipeline";
 import type {
   Segment,
@@ -28,6 +30,25 @@ import {
 } from "@/lib/jev-decision";
 
 fal.config({ credentials: process.env.FAL_KEY! });
+
+/**
+ * Resolves local tusd upload URLs (http://localhost:1080/files/...) to public fal storage URLs
+ * so fal.ai cloud inference models never fail with 422 Unprocessable Entity non-routable errors!
+ */
+async function ensurePublicFalUrl(url: string): Promise<string> {
+  if (url.includes("localhost") || url.includes("127.0.0.1") || url.includes("0.0.0.0")) {
+    const fileId = url.split("/").pop();
+    if (fileId) {
+      const localPath = path.join(process.cwd(), "uploads", fileId);
+      if (fs.existsSync(localPath)) {
+        console.log(`[reeltrix] Resolving local upload (${localPath}) to fal storage for cloud model...`);
+        const blob = fileToBlob(localPath);
+        return await fal.storage.upload(blob);
+      }
+    }
+  }
+  return url;
+}
 
 /* ---- SSE helpers ---- */
 function sendEvent(
@@ -140,12 +161,13 @@ export async function POST(request: NextRequest) {
             });
 
             try {
+              const publicAudioUrl = await ensurePublicFalUrl(file.url);
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const whisperResult = await (fal.subscribe as any)(
                 "fal-ai/whisper",
                 {
                   input: {
-                    audio_url: file.url,
+                    audio_url: publicAudioUrl,
                     task: "transcribe",
                     chunk_level: "word",
                     version: "3",
