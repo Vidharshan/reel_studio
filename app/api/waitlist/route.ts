@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { head, list, put } from "@vercel/blob";
+import { get, head, list, put } from "@vercel/blob";
 import { createHmac } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -83,33 +83,72 @@ async function getBlobCount(): Promise<number | null> {
   }
 }
 
+async function readExistingBlob(pathname: string): Promise<WaitlistEntry | null> {
+  try {
+    const existingMeta = await head(pathname);
+    if (existingMeta?.url) {
+      const res = await fetch(existingMeta.url, { cache: "no-store" });
+      if (res.ok) {
+        return (await res.json()) as WaitlistEntry;
+      }
+    }
+  } catch {
+    // Public head/fetch failed or blob does not exist; try private get below
+  }
+
+  try {
+    const privateResult = await get(pathname, {
+      access: "private",
+      useCache: false,
+    });
+    if (privateResult?.statusCode === 200 && privateResult.stream) {
+      const text = await new Response(privateResult.stream).text();
+      return JSON.parse(text) as WaitlistEntry;
+    }
+  } catch {
+    // Blob does not exist yet
+  }
+
+  return null;
+}
+
+async function putBlobAutoAccess(pathname: string, body: string): Promise<void> {
+  try {
+    await put(pathname, body, {
+      access: "public",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+    });
+  } catch (publicErr) {
+    // If the Vercel Blob store is configured as private, retry with private access
+    try {
+      await put(pathname, body, {
+        access: "private",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/json",
+      });
+    } catch {
+      throw publicErr;
+    }
+  }
+}
+
 async function saveToBlob(
   email: string,
   role: WaitlistRole | undefined,
   now: string
-): Promise<{ saved: boolean; alreadyJoined: boolean }> {
+): Promise<{ saved: boolean; alreadyJoined: boolean; error?: string }> {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return { saved: false, alreadyJoined: false };
   }
 
   const pathname = getWaitlistPathname(email);
-  let existingEntry: WaitlistEntry | null = null;
-  let alreadyJoined = false;
+  const existingEntry = await readExistingBlob(pathname);
+  const alreadyJoined = Boolean(existingEntry);
 
-  try {
-    const existingMeta = await head(pathname);
-    if (existingMeta?.url) {
-      alreadyJoined = true;
-      const res = await fetch(existingMeta.url, { cache: "no-store" });
-      if (res.ok) {
-        existingEntry = (await res.json()) as WaitlistEntry;
-      }
-    }
-  } catch {
-    // Blob does not exist yet — expected for new signups
-  }
-
-  // If already joined and no new role change, keep the original record intact
+  // If already joined in Blob and no new role change, keep the original record intact
   if (alreadyJoined && (!role || existingEntry?.role === role)) {
     return { saved: true, alreadyJoined: true };
   }
@@ -128,16 +167,12 @@ async function saveToBlob(
       };
 
   try {
-    await put(pathname, JSON.stringify(payload), {
-      access: "public",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-    });
+    await putBlobAutoAccess(pathname, JSON.stringify(payload));
     return { saved: true, alreadyJoined };
   } catch (err) {
+    const message = err instanceof Error ? err.message : "Blob write failed";
     console.error("[waitlist] Blob write error:", err);
-    return { saved: false, alreadyJoined };
+    return { saved: false, alreadyJoined, error: message };
   }
 }
 
@@ -149,7 +184,10 @@ export async function GET() {
       ? Math.max(localEntries.length, blobCount)
       : localEntries.length;
 
-  return NextResponse.json({ count });
+  return NextResponse.json({
+    count,
+    blobConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+  });
 }
 
 export async function POST(req: Request) {
@@ -183,9 +221,21 @@ export async function POST(req: Request) {
 
     const email = rawEmail.trim().toLowerCase();
     const now = new Date().toISOString();
+    const hasBlobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 
     // 1. Persist to Vercel Blob if configured (preserving existing entries)
     const blobResult = await saveToBlob(email, role, now);
+
+    // If Blob is configured in this environment, never silently succeed if Blob write failed
+    if (hasBlobToken && !blobResult.saved) {
+      return NextResponse.json(
+        {
+          error: "Unable to save your spot to storage. Please try again.",
+          storage: "blob_error",
+        },
+        { status: 500 }
+      );
+    }
 
     // 2. Persist to local waitlist.json (preserving all existing entries)
     const entries = getLocalEntries();
@@ -207,7 +257,7 @@ export async function POST(req: Request) {
         };
         localSaved = writeLocalEntries(entries);
       } else {
-        localSaved = true;
+        localSaved = !hasBlobToken;
       }
     } else {
       const newEntry: WaitlistEntry = {
@@ -233,6 +283,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       alreadyJoined,
+      storage: blobResult.saved ? "blob" : "local",
       count,
     });
   } catch (err) {
