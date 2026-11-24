@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { head, list, put } from "@vercel/blob";
 import { createHmac } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -8,13 +8,18 @@ export const runtime = "nodejs";
 
 const WAITLIST_FILE = path.join(process.cwd(), "waitlist.json");
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL_LENGTH = 254;
+
+type WaitlistRole = "founder" | "creator";
 
 type WaitlistEntry = {
   email: string;
+  role?: WaitlistRole;
   timestamp: string;
+  updatedAt?: string;
 };
 
-function getWaitlistPathname(email: string) {
+function getWaitlistPathname(email: string): string {
   const emailHash = createHmac(
     "sha256",
     process.env.BLOB_READ_WRITE_TOKEN ?? "local-development"
@@ -31,67 +36,209 @@ function getLocalEntries(): WaitlistEntry[] {
       const parsed = JSON.parse(fileData);
       return Array.isArray(parsed) ? parsed : [];
     }
-  } catch { /* ignore read errors */ }
+  } catch (err) {
+    console.error("[waitlist] Failed to read local waitlist.json:", err);
+  }
   return [];
 }
 
-async function saveWaitlistEntry(entry: WaitlistEntry): Promise<number> {
-  // 1. If Vercel Blob token is configured, write to Vercel Blob
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      await put(getWaitlistPathname(entry.email), JSON.stringify(entry), {
-        access: "public",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: "application/json",
+function writeLocalEntries(entries: WaitlistEntry[]): boolean {
+  try {
+    const tmpPath = path.join(
+      process.cwd(),
+      `.waitlist.${process.pid}.${Date.now()}.tmp`
+    );
+    fs.writeFileSync(tmpPath, JSON.stringify(entries, null, 2) + "\n", "utf-8");
+    fs.renameSync(tmpPath, WAITLIST_FILE);
+    return true;
+  } catch {
+    console.warn(
+      "[waitlist] Local filesystem unavailable for writes (read-only deployment)."
+    );
+    return false;
+  }
+}
+
+async function getBlobCount(): Promise<number | null> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+
+  try {
+    let total = 0;
+    let cursor: string | undefined;
+
+    do {
+      const page = await list({
+        prefix: "waitlist/",
+        limit: 1000,
+        cursor,
       });
-    } catch (err) {
-      console.error("[waitlist] Blob storage error:", err);
-    }
+      total += page.blobs.length;
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+
+    return total;
+  } catch (err) {
+    console.error("[waitlist] Blob list error:", err);
+    return null;
+  }
+}
+
+async function saveToBlob(
+  email: string,
+  role: WaitlistRole | undefined,
+  now: string
+): Promise<{ saved: boolean; alreadyJoined: boolean }> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return { saved: false, alreadyJoined: false };
   }
 
-  // 2. Local file storage fallback
-  const entries = getLocalEntries();
-  const isDuplicate = entries.some((e) => e.email === entry.email);
-  if (!isDuplicate) {
-    entries.push(entry);
-    try {
-      fs.writeFileSync(WAITLIST_FILE, JSON.stringify(entries, null, 2), "utf-8");
-    } catch {
-      // Ignore read-only filesystem errors on Vercel deployment without Blob token
-      console.warn("[waitlist] File system read-only or unwritable (Vercel deployment mode).");
+  const pathname = getWaitlistPathname(email);
+  let existingEntry: WaitlistEntry | null = null;
+  let alreadyJoined = false;
+
+  try {
+    const existingMeta = await head(pathname);
+    if (existingMeta?.url) {
+      alreadyJoined = true;
+      const res = await fetch(existingMeta.url, { cache: "no-store" });
+      if (res.ok) {
+        existingEntry = (await res.json()) as WaitlistEntry;
+      }
     }
+  } catch {
+    // Blob does not exist yet — expected for new signups
   }
 
-  return entries.length;
+  // If already joined and no new role change, keep the original record intact
+  if (alreadyJoined && (!role || existingEntry?.role === role)) {
+    return { saved: true, alreadyJoined: true };
+  }
+
+  const payload: WaitlistEntry = existingEntry
+    ? {
+        ...existingEntry,
+        email,
+        ...(role ? { role } : {}),
+        updatedAt: now,
+      }
+    : {
+        email,
+        ...(role ? { role } : {}),
+        timestamp: now,
+      };
+
+  try {
+    await put(pathname, JSON.stringify(payload), {
+      access: "public",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+    });
+    return { saved: true, alreadyJoined };
+  } catch (err) {
+    console.error("[waitlist] Blob write error:", err);
+    return { saved: false, alreadyJoined };
+  }
 }
 
 export async function GET() {
-  const entries = getLocalEntries();
-  return NextResponse.json({ count: entries.length });
+  const localEntries = getLocalEntries();
+  const blobCount = await getBlobCount();
+  const count =
+    blobCount !== null
+      ? Math.max(localEntries.length, blobCount)
+      : localEntries.length;
+
+  return NextResponse.json({ count });
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const email = body?.email;
+    const rawEmail = body?.email;
+    const rawRole = body?.role;
 
-    if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) {
-      return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
+    if (
+      typeof rawEmail !== "string" ||
+      rawEmail.trim().length > MAX_EMAIL_LENGTH ||
+      !EMAIL_PATTERN.test(rawEmail.trim())
+    ) {
+      return NextResponse.json(
+        { error: "Enter a valid email address." },
+        { status: 400 }
+      );
     }
 
-    const newEntry: WaitlistEntry = {
-      email: email.trim().toLowerCase(),
-      timestamp: new Date().toISOString(),
-    };
+    let role: WaitlistRole | undefined;
+    if (rawRole !== undefined && rawRole !== null && rawRole !== "") {
+      if (rawRole === "founder" || rawRole === "creator") {
+        role = rawRole;
+      } else {
+        return NextResponse.json(
+          { error: "Invalid role selection." },
+          { status: 400 }
+        );
+      }
+    }
 
-    const count = await saveWaitlistEntry(newEntry);
+    const email = rawEmail.trim().toLowerCase();
+    const now = new Date().toISOString();
 
-    return NextResponse.json({ success: true, count });
+    // 1. Persist to Vercel Blob if configured (preserving existing entries)
+    const blobResult = await saveToBlob(email, role, now);
+
+    // 2. Persist to local waitlist.json (preserving all existing entries)
+    const entries = getLocalEntries();
+    const existingIndex = entries.findIndex(
+      (e) => e.email.toLowerCase() === email
+    );
+
+    let localSaved = false;
+    let alreadyJoined = blobResult.alreadyJoined;
+
+    if (existingIndex >= 0) {
+      alreadyJoined = true;
+      const existing = entries[existingIndex];
+      if (role && existing.role !== role) {
+        entries[existingIndex] = {
+          ...existing,
+          role,
+          updatedAt: now,
+        };
+        localSaved = writeLocalEntries(entries);
+      } else {
+        localSaved = true;
+      }
+    } else {
+      const newEntry: WaitlistEntry = {
+        email,
+        ...(role ? { role } : {}),
+        timestamp: now,
+      };
+      entries.push(newEntry);
+      localSaved = writeLocalEntries(entries);
+    }
+
+    if (!blobResult.saved && !localSaved) {
+      return NextResponse.json(
+        { error: "Unable to save your spot right now. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    const blobCount = await getBlobCount();
+    const count =
+      blobCount !== null ? Math.max(entries.length, blobCount) : entries.length;
+
+    return NextResponse.json({
+      success: true,
+      alreadyJoined,
+      count,
+    });
   } catch (err) {
     console.error("[waitlist] Error:", err);
     return NextResponse.json(
-      { error: "Unable to join waitlist. Please try again." },
+      { error: "Unable to join the waitlist. Please try again." },
       { status: 500 }
     );
   }
